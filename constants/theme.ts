@@ -33,17 +33,17 @@ export const colors = {
 } as const;
 
 export const categoryColors: Record<string, string> = {
-  academic: "#0B2E59",
-  dining: "#B5651D",
-  coffee: "#6F4E37",
-  study: "#3E5C76",
-  landmark: "#7A5C3E",
-  grocery: "#4B6B3C",
-  parking: "#5B5B5B",
-  resource: "#3E7A5E",
-  gathering: "#8A4B6E",
-  construction: "#B5651D",
-  accessible: "#3E7A5E",
+  academic: "#3B5FE0",
+  dining: "#E0304F",
+  coffee: "#8B5A2B",
+  study: "#7A5CE0",
+  landmark: "#E0A72E",
+  grocery: "#4FAE32",
+  parking: "#5B7C99",
+  resource: "#1FA97A",
+  gathering: "#C23F9C",
+  construction: "#F2843D",
+  accessible: "#22A6B3",
 };
 
 export const spacing = {
