@@ -4,3 +4,4 @@ export * from "./entrance";
 export * from "./construction";
 export * from "./event";
 export * from "./route";
+export * from "./proposal";

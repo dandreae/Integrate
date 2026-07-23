@@ -41,7 +41,8 @@
     "plugins": [
       "expo-router",
       "expo-location",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

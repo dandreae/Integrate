@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,7 +6,9 @@ import type { Place } from "@/types";
 import { Badge } from "@/components/Badge";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
+import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
 import { placeRepository } from "@/services/repositories";
+import { applyPlaceOverride } from "@/services/repositories/firestore/placeOverridesRepository";
 import { useAppStore } from "@/store/useAppStore";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 
@@ -15,12 +17,18 @@ export default function SavedScreen() {
   const savedPlaceIds = useSavedPlacesStore((state) => state.savedPlaceIds);
   const toggleSaved = useSavedPlacesStore((state) => state.toggleSaved);
   const [places, setPlaces] = useState<Place[]>([]);
+  const placeOverrides = usePlaceOverrides();
 
   useEffect(() => {
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
   }, [selectedCampusId]);
 
-  const savedPlaces = places.filter((place) => savedPlaceIds.includes(place.id));
+  const overriddenPlaces = useMemo(
+    () => places.map((place) => applyPlaceOverride(place, placeOverrides.get(place.id))),
+    [places, placeOverrides]
+  );
+
+  const savedPlaces = overriddenPlaces.filter((place) => savedPlaceIds.includes(place.id));
 
   if (savedPlaces.length === 0) {
     return (

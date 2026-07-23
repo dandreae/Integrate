@@ -10,7 +10,9 @@ import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
 import { getAccessibilitySummary } from "@/features/places/accessibilitySummary";
 import { formatDistanceMeters, haversineDistanceMeters } from "@/features/routing/geo";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
+import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
 import { placeRepository } from "@/services/repositories";
+import { applyPlaceOverride } from "@/services/repositories/firestore/placeOverridesRepository";
 import { useDirectionsStore } from "@/store/useDirectionsStore";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 
@@ -18,9 +20,15 @@ type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [place, setPlace] = useState<Place | null>(null);
+  const [rawPlace, setRawPlace] = useState<Place | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const placeOverrides = usePlaceOverrides();
+
+  const place = useMemo(
+    () => (rawPlace ? applyPlaceOverride(rawPlace, placeOverrides.get(rawPlace.id)) : null),
+    [rawPlace, placeOverrides]
+  );
 
   const isSaved = useSavedPlacesStore((state) => (place ? state.isSaved(place.id) : false));
   const toggleSaved = useSavedPlacesStore((state) => state.toggleSaved);
@@ -30,7 +38,7 @@ export default function PlaceDetailScreen() {
   useEffect(() => {
     if (!id) return;
     placeRepository.getPlaceById(id).then((result) => {
-      setPlace(result ?? null);
+      setRawPlace(result ?? null);
       setNotFound(!result);
     });
   }, [id]);

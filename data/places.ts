@@ -48,6 +48,32 @@ export const PLACES: Place[] = [
     isSaved: false,
   },
   {
+    id: "maguire-hall",
+    campusId: DEFAULT_CAMPUS_ID,
+    officialName: "Maguire Hall",
+    localName: "Maguire",
+    category: "academic",
+    description:
+      "Classroom building on the west wing of Healy, tucked just past Healy Lawn.",
+    latitude: 38.9088,
+    longitude: -77.074,
+    accessibilityFeatures: ["ramp"],
+    entrances: [
+      {
+        id: "maguire-main",
+        placeId: "maguire-hall",
+        latitude: 38.9088,
+        longitude: -77.0741,
+        label: "Main entrance",
+        isAccessible: true,
+      },
+    ],
+    studentTips: ["Quiet building — easy to overlook since it's set back from the main quad."],
+    openingHours: { summary: "Mon–Fri 8am–8pm" },
+    imageUrl: undefined,
+    isSaved: false,
+  },
+  {
     id: "white-gravenor",
     campusId: DEFAULT_CAMPUS_ID,
     officialName: "White-Gravenor Hall",
@@ -246,8 +272,8 @@ export const PLACES: Place[] = [
   {
     id: "leos-dining-hall",
     campusId: DEFAULT_CAMPUS_ID,
-    officialName: "Leo J. O'Donovan Dining Hall",
-    localName: "Leo's",
+    officialName: "Leo's",
+    localName: "Leo J. O'Donovan Dining Hall",
     category: "dining",
     description: "The main all-you-can-eat dining hall for on-campus students.",
     latitude: 38.9073,
