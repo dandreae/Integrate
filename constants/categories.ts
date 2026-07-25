@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import type { Ionicons } from "@expo/vector-icons";
-import type { AccessibilityFeature, PlaceCategory } from "@/types";
-import { categoryColors } from "./theme";
+import type { AccessibilityFeature, PlaceCategory, RoutePreference, RouteWarningSeverity } from "@/types";
+import { categoryColors, colors } from "./theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -59,6 +59,22 @@ export const ACCESSIBILITY_FEATURE_META: Record<AccessibilityFeature, CategoryMe
     icon: "car-outline",
     color: categoryColors.accessible,
   },
+};
+
+/**
+ * Icon + word pairing for each warning severity — used alongside color so
+ * warnings never rely on color alone to communicate meaning.
+ */
+export const ROUTE_WARNING_SEVERITY_META: Record<RouteWarningSeverity, CategoryMeta> = {
+  info: { label: "Info", icon: "information-circle-outline", color: colors.textSecondary },
+  caution: { label: "Caution", icon: "alert-circle-outline", color: colors.warning },
+  high: { label: "Alert", icon: "warning-outline", color: colors.danger },
+};
+
+export const ROUTE_PREFERENCE_META: Record<RoutePreference, CategoryMeta> = {
+  fastest: { label: "Fastest", icon: "flash-outline", color: colors.accent },
+  accessible: { label: "Accessible", icon: "accessibility-outline", color: colors.accessible },
+  avoidConstruction: { label: "Avoid construction", icon: "construct-outline", color: colors.warning },
 };
 
 export const MAP_FILTER_CATEGORIES: PlaceCategory[] = [

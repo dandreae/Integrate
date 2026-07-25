@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -10,12 +11,15 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { Place } from "@/types";
+import type { CampusReport, Place } from "@/types";
 import { Badge } from "@/components/Badge";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
+import { reportRepository } from "@/services/repositories";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 import { getAccessibilitySummary } from "./accessibilitySummary";
+import { getPlaceTrustSignals, hasActiveAccessibilityReport } from "./dataTrust";
+import { getLiveStatus, LIVE_STATUS_LABEL } from "./liveStatus";
 import { formatDistanceMeters } from "@/features/routing/geo";
 
 const DISMISS_THRESHOLD = 90;
@@ -41,6 +45,47 @@ export function PlacePreviewCard({
   const meta = PLACE_CATEGORY_META[place.category];
   const accessibilitySummary = getAccessibilitySummary(place);
   const hasAccessibleEntrance = place.entrances.some((entrance) => entrance.isAccessible);
+  const liveStatus = getLiveStatus(place);
+  const insiderTip = place.studentTips[0];
+
+  const [relatedReports, setRelatedReports] = useState<CampusReport[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const entranceIds = new Set(place.entrances.map((entrance) => entrance.id));
+
+    reportRepository.getAllReports().then((allReports) => {
+      if (cancelled) return;
+      setRelatedReports(
+        allReports.filter(
+          (report) =>
+            (report.relatedEntity.type === "place" && report.relatedEntity.id === place.id) ||
+            (report.relatedEntity.type === "entrance" && entranceIds.has(report.relatedEntity.id))
+        )
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [place]);
+
+  const trustSignals = getPlaceTrustSignals(place, hasActiveAccessibilityReport(relatedReports));
+
+  function handleDirectionsPress() {
+    if (trustSignals.length === 0) {
+      onDirections(place);
+      return;
+    }
+    Alert.alert(
+      "Before you go",
+      `${trustSignals.map((signal) => signal.explanation).join("\n\n")}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Get directions anyway", onPress: () => onDirections(place) },
+      ]
+    );
+  }
 
   const translateY = useSharedValue(0);
 
@@ -128,11 +173,27 @@ export function PlacePreviewCard({
               {hasAccessibleEntrance && (
                 <Badge label="Accessible entrance" icon="accessibility-outline" tone="accessible" />
               )}
+              {liveStatus && (
+                <Badge
+                  label={LIVE_STATUS_LABEL[liveStatus]}
+                  icon={liveStatus === "busy" ? "people-outline" : "moon-outline"}
+                  tone={liveStatus === "busy" ? "warning" : "neutral"}
+                />
+              )}
             </View>
 
             <Text style={styles.description} numberOfLines={2}>
               {place.description}
             </Text>
+
+            {insiderTip && (
+              <View style={styles.insiderTip}>
+                <Ionicons name="bulb-outline" size={14} color={colors.accent} />
+                <Text style={styles.insiderTipText} numberOfLines={2}>
+                  {insiderTip}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.metaRow}>
               {distanceMeters != null && (
@@ -167,11 +228,29 @@ export function PlacePreviewCard({
             </View>
           </Pressable>
 
+          {trustSignals.length > 0 && (
+            <Pressable
+              onPress={() => Alert.alert(trustSignals[0].label, trustSignals[0].explanation)}
+              accessibilityRole="button"
+              accessibilityLabel={`${trustSignals[0].label}. Tap for details.`}
+              style={styles.trustRow}
+              hitSlop={4}
+            >
+              <Ionicons name={trustSignals[0].icon} size={16} color={colors.warning} />
+              <Text style={styles.trustText} numberOfLines={1}>
+                {trustSignals[0].label}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
-            onPress={() => onDirections(place)}
+            onPress={handleDirectionsPress}
             accessibilityRole="button"
             accessibilityLabel={`Get directions to ${place.officialName}`}
-            style={styles.directionsButton}
+            style={({ pressed }) => [
+              styles.directionsButton,
+              pressed && styles.directionsButtonPressed,
+            ]}
           >
             <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
             <Text style={styles.directionsLabel}>Directions</Text>
@@ -244,6 +323,21 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: spacing.md,
   },
+  insiderTip: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: colors.accentMuted,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    marginTop: spacing.sm,
+  },
+  insiderTipText: {
+    ...typography.caption,
+    color: colors.accent,
+    flex: 1,
+  },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -260,6 +354,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  trustText: {
+    ...typography.caption,
+    color: colors.warning,
+    flexShrink: 1,
+  },
   directionsButton: {
     height: 48,
     borderRadius: radii.md,
@@ -269,6 +374,10 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: spacing.lg,
     backgroundColor: colors.accent,
+  },
+  directionsButtonPressed: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.92,
   },
   directionsLabel: {
     ...typography.bodyStrong,

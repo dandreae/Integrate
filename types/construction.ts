@@ -16,4 +16,7 @@ export interface ConstructionZone {
   startDate: string;
   endDate: string;
   affectedAccessibility: boolean;
+  /** ISO date this zone's status was last confirmed accurate. */
+  dataLastVerifiedAt: string;
+  verificationSource: string;
 }

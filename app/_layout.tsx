@@ -12,6 +12,9 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="place/[id]" options={{ presentation: "modal" }} />
+          <Stack.Screen name="route-planner" options={{ presentation: "modal" }} />
+          <Stack.Screen name="report/new" options={{ presentation: "modal" }} />
+          <Stack.Screen name="first-day" options={{ presentation: "modal", gestureEnabled: false }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

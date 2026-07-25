@@ -17,6 +17,8 @@ export const CONSTRUCTION_ZONES: ConstructionZone[] = [
     startDate: "2026-07-01",
     endDate: "2026-08-15",
     affectedAccessibility: true,
+    dataLastVerifiedAt: "2026-07-18",
+    verificationSource: "Campus Facilities work order #2026-0714",
   },
   {
     id: "leavey-esplanade-repaving",
@@ -33,5 +35,7 @@ export const CONSTRUCTION_ZONES: ConstructionZone[] = [
     startDate: "2026-07-10",
     endDate: "2026-09-01",
     affectedAccessibility: true,
+    dataLastVerifiedAt: "2026-07-15",
+    verificationSource: "Campus Facilities work order #2026-0698",
   },
 ];

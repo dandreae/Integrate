@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import type { Place } from "@/types";
 import { Badge } from "@/components/Badge";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
@@ -41,17 +43,24 @@ export default function SavedScreen() {
         data={savedPlaces}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const meta = PLACE_CATEGORY_META[item.category];
           return (
-            <View style={styles.card}>
-              <View style={styles.cardText}>
-                <Text style={styles.cardTitle}>{item.officialName}</Text>
-                {item.localName && <Text style={styles.cardSubtitle}>"{item.localName}"</Text>}
-                <View style={styles.badgeRow}>
-                  <Badge label={meta.label} icon={meta.icon} tone="accent" />
+            <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(220)} style={styles.card}>
+              <Pressable
+                onPress={() => router.push({ pathname: "/place/[id]", params: { id: item.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={`Open details for ${item.officialName}`}
+                style={({ pressed }) => [styles.cardTouchable, pressed && styles.cardPressed]}
+              >
+                <View style={styles.cardText}>
+                  <Text style={styles.cardTitle}>{item.officialName}</Text>
+                  {item.localName && <Text style={styles.cardSubtitle}>"{item.localName}"</Text>}
+                  <View style={styles.badgeRow}>
+                    <Badge label={meta.label} icon={meta.icon} tone="accent" />
+                  </View>
                 </View>
-              </View>
+              </Pressable>
               <Pressable
                 onPress={() => toggleSaved(item.id)}
                 accessibilityRole="button"
@@ -61,7 +70,7 @@ export default function SavedScreen() {
               >
                 <Ionicons name="bookmark" size={22} color={colors.accent} />
               </Pressable>
-            </View>
+            </Animated.View>
           );
         }}
       />
@@ -91,8 +100,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.surface,
     borderRadius: radii.md,
-    padding: spacing.md,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
     ...shadow.card,
+  },
+  cardTouchable: {
+    flex: 1,
+    paddingVertical: spacing.md,
+  },
+  cardPressed: {
+    opacity: 0.7,
   },
   cardText: {
     flex: 1,

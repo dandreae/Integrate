@@ -5,10 +5,12 @@ import { colors, radii, spacing, typography } from "@/constants/theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
+export type BadgeTone = "neutral" | "accent" | "accessible" | "warning" | "danger";
+
 interface BadgeProps {
   label: string;
   icon?: IoniconName;
-  tone?: "neutral" | "accent" | "accessible" | "warning" | "danger";
+  tone?: BadgeTone;
 }
 
 const TONE_STYLES = {

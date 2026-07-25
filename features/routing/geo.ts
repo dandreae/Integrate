@@ -46,6 +46,30 @@ export function formatDurationMinutes(minutes: number): string {
   return minutes === 1 ? "1 min" : `${minutes} min`;
 }
 
+/** Compass bearing in degrees [0, 360) from `a` to `b`. */
+export function bearingDegrees(a: LatLng, b: LatLng): number {
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const dLng = toRadians(b.longitude - a.longitude);
+
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
+}
+
+/**
+ * Coarse turn direction between two consecutive bearings — used to phrase
+ * simulated step-by-step instructions ("bear left/right") from route
+ * geometry alone, since the mock engine has no real street/hallway graph.
+ */
+export function relativeTurn(fromBearing: number, toBearing: number): "left" | "right" | "straight" {
+  let diff = toBearing - fromBearing;
+  diff = ((diff + 180) % 360) - 180;
+  if (Math.abs(diff) < 15) return "straight";
+  return diff > 0 ? "right" : "left";
+}
+
 export function midpoint(a: LatLng, b: LatLng): LatLng {
   return {
     latitude: (a.latitude + b.latitude) / 2,
@@ -105,4 +129,21 @@ export function distanceToSegmentMeters(
   };
 
   return haversineDistanceMeters(point, closest);
+}
+
+/**
+ * Shortest distance from a point to an entire multi-segment path, in
+ * meters — the "distance from a route" building block used to decide
+ * whether a report is geographically relevant to a computed route.
+ */
+export function distanceToPathMeters(point: LatLng, path: LatLng[]): number {
+  if (path.length === 0) return Infinity;
+  if (path.length === 1) return haversineDistanceMeters(point, path[0]);
+
+  let closest = Infinity;
+  for (let i = 1; i < path.length; i++) {
+    const distance = distanceToSegmentMeters(point, path[i - 1], path[i]);
+    if (distance < closest) closest = distance;
+  }
+  return closest;
 }
