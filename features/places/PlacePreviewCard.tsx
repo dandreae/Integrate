@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -42,6 +42,9 @@ export function PlacePreviewCard({
   const accessibilitySummary = getAccessibilitySummary(place);
   const hasAccessibleEntrance = place.entrances.some((entrance) => entrance.isAccessible);
 
+  const { height: windowHeight } = useWindowDimensions();
+  const panelHeight = windowHeight / 3;
+
   const translateY = useSharedValue(0);
 
   const dragStyle = useAnimatedStyle(() => ({
@@ -72,7 +75,7 @@ export function PlacePreviewCard({
       accessibilityViewIsModal
     >
       <Animated.View style={dragStyle}>
-        <SafeAreaView edges={["bottom"]} style={styles.card}>
+        <SafeAreaView edges={["bottom"]} style={[styles.card, { height: panelHeight }]}>
           <GestureDetector gesture={panGesture}>
             <View style={styles.dragZone}>
               <View style={styles.handle} />
@@ -118,10 +121,10 @@ export function PlacePreviewCard({
             </View>
           </View>
 
-          <Pressable
-            onPress={() => onOpenDetail(place)}
-            accessibilityRole="button"
-            accessibilityLabel={`View details for ${place.officialName}`}
+          <ScrollView
+            style={styles.scrollBody}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
           >
             <View style={styles.badgeRow}>
               <Badge label={meta.label} icon={meta.icon} tone="accent" />
@@ -130,9 +133,7 @@ export function PlacePreviewCard({
               )}
             </View>
 
-            <Text style={styles.description} numberOfLines={2}>
-              {place.description}
-            </Text>
+            <Text style={styles.description}>{place.description}</Text>
 
             <View style={styles.metaRow}>
               {distanceMeters != null && (
@@ -143,9 +144,7 @@ export function PlacePreviewCard({
               )}
               <View style={styles.metaItem}>
                 <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {place.openingHours.summary}
-                </Text>
+                <Text style={styles.metaText}>{place.openingHours.summary}</Text>
               </View>
             </View>
 
@@ -158,14 +157,14 @@ export function PlacePreviewCard({
               <Text
                 style={[
                   styles.metaText,
+                  styles.metaTextWrap,
                   hasAccessibleEntrance && { color: colors.accessible },
                 ]}
-                numberOfLines={1}
               >
                 {accessibilitySummary}
               </Text>
             </View>
-          </Pressable>
+          </ScrollView>
 
           <Pressable
             onPress={() => onDirections(place)}
@@ -196,6 +195,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     ...shadow.floating,
+  },
+  scrollBody: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.sm,
+  },
+  metaTextWrap: {
+    flexShrink: 1,
   },
   dragZone: {
     paddingVertical: spacing.sm,
