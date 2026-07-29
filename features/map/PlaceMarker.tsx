@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   pin: {
+    alignSelf: "center",
     width: 30,
     height: 30,
     borderRadius: 15,
