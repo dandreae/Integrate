@@ -288,6 +288,7 @@ export default function MapScreen() {
         showConstruction={filters.showConstruction}
         showAccessibleEntrances={filters.showAccessibleEntrances}
         selectedPlaceId={selectedPlace?.id ?? null}
+        searchActive={searchQuery.trim().length > 0}
         activeRoute={activeRoute}
         draftCoordinates={isDroppingPoints ? draftCoordinates : undefined}
         onSelectPlace={handleSelectPlace}

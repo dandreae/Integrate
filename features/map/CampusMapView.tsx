@@ -1,6 +1,6 @@
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import MapView, { Marker, Polyline, type MapPressEvent } from "react-native-maps";
+import MapView, { Marker, Polyline, type MapPressEvent, type Region } from "react-native-maps";
 import type { Campus, ConstructionZone, LatLng, Place, Proposal, Route } from "@/types";
 import { colors, radii, shadow } from "@/constants/theme";
 import { PlaceMarker } from "./PlaceMarker";
@@ -16,6 +16,8 @@ interface CampusMapViewProps {
   showConstruction: boolean;
   showAccessibleEntrances: boolean;
   selectedPlaceId: string | null;
+  /** True while a search query is narrowing `places` — forces labels on for every result, bypassing zoom culling. */
+  searchActive: boolean;
   activeRoute?: Route | null;
   /** In-progress tap points while reporting a new construction zone, not yet submitted. */
   draftCoordinates?: LatLng[];
@@ -23,6 +25,33 @@ interface CampusMapViewProps {
   onSelectConstructionZone: (zone: ConstructionZone) => void;
   onSelectProposal: (proposal: Proposal) => void;
   onMapPress: (coordinate: LatLng) => void;
+}
+
+/**
+ * How many place labels stay on screen at once, keyed by zoom (smaller
+ * latitudeDelta = more zoomed in). Mirrors Apple/Google Maps-style POI label
+ * thinning: fewer labels zoomed out, more zoomed in, but never zero.
+ */
+function maxLabelsForZoom(latitudeDelta: number): number {
+  if (latitudeDelta >= 0.05) return 3;
+  if (latitudeDelta >= 0.02) return 6;
+  if (latitudeDelta >= 0.008) return 12;
+  return Infinity;
+}
+
+/**
+ * Which places should show a label right now. Priority when culling is just
+ * `places` array order (i.e. declaration order in data/places.ts) — reorder
+ * that file to change which pins surface first when zoomed out.
+ */
+function computeLabelVisiblePlaceIds(
+  places: Place[],
+  latitudeDelta: number,
+  searchActive: boolean
+): Set<string> {
+  if (searchActive) return new Set(places.map((place) => place.id));
+  const max = maxLabelsForZoom(latitudeDelta);
+  return new Set(places.slice(0, max).map((place) => place.id));
 }
 
 export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function CampusMapView(
@@ -34,6 +63,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     showConstruction,
     showAccessibleEntrances,
     selectedPlaceId,
+    searchActive,
     activeRoute,
     draftCoordinates,
     onSelectPlace,
@@ -43,6 +73,17 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
   },
   ref
 ) {
+  const [region, setRegion] = useState<Region>(campus.mapRegion);
+
+  useEffect(() => {
+    setRegion(campus.mapRegion);
+  }, [campus.id]);
+
+  const visibleLabelPlaceIds = useMemo(
+    () => computeLabelVisiblePlaceIds(places, region.latitudeDelta, searchActive),
+    [places, region.latitudeDelta, searchActive]
+  );
+
   function handlePress(event: MapPressEvent) {
     onMapPress(event.nativeEvent.coordinate);
   }
@@ -56,6 +97,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
       showsMyLocationButton={false}
       showsCompass={false}
       onPress={handlePress}
+      onRegionChangeComplete={setRegion}
       accessibilityLabel={`Map of ${campus.name}`}
     >
       {places.map((place) => (
@@ -63,6 +105,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
           key={place.id}
           place={place}
           selected={place.id === selectedPlaceId}
+          showLabel={visibleLabelPlaceIds.has(place.id)}
           onPress={onSelectPlace}
         />
       ))}

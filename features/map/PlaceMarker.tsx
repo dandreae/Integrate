@@ -1,28 +1,49 @@
-import { memo } from "react";
-import { StyleSheet, View } from "react-native";
+import { memo, useEffect, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import type { Place } from "@/types";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
-import { colors, shadow } from "@/constants/theme";
+import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
 
 interface PlaceMarkerProps {
   place: Place;
   selected: boolean;
+  /** Whether zoom level / active search says this place's label should be visible. Selection always wins regardless. */
+  showLabel: boolean;
   onPress: (place: Place) => void;
 }
 
-function PlaceMarkerComponent({ place, selected, onPress }: PlaceMarkerProps) {
+function PlaceMarkerComponent({ place, selected, showLabel, onPress }: PlaceMarkerProps) {
   const meta = PLACE_CATEGORY_META[place.category];
+  const labelVisible = selected || showLabel;
+
+  // react-native-maps only re-snapshots a custom marker's native image while
+  // tracksViewChanges is true, so we flash it on for a moment whenever the
+  // label toggles, then drop it back to false — leaving it on permanently
+  // for every visible-label marker would hurt Android scroll/zoom perf.
+  const [tracking, setTracking] = useState(labelVisible);
+  useEffect(() => {
+    setTracking(true);
+    const timeout = setTimeout(() => setTracking(false), 300);
+    return () => clearTimeout(timeout);
+  }, [labelVisible]);
 
   return (
     <Marker
       coordinate={{ latitude: place.latitude, longitude: place.longitude }}
       onPress={() => onPress(place)}
-      tracksViewChanges={false}
+      tracksViewChanges={tracking}
       accessibilityLabel={`${place.officialName}${place.localName ? `, also called ${place.localName}` : ""}, ${meta.label}`}
       zIndex={selected ? 10 : 1}
     >
+      {labelVisible && (
+        <View style={styles.labelPill}>
+          <Text style={styles.labelText} numberOfLines={1}>
+            {place.localName ?? place.officialName}
+          </Text>
+        </View>
+      )}
       <View
         style={[
           styles.pin,
@@ -40,6 +61,22 @@ function PlaceMarkerComponent({ place, selected, onPress }: PlaceMarkerProps) {
 export const PlaceMarker = memo(PlaceMarkerComponent);
 
 const styles = StyleSheet.create({
+  labelPill: {
+    alignSelf: "center",
+    maxWidth: 130,
+    marginBottom: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
+  },
+  labelText: {
+    ...typography.label,
+    color: colors.textPrimary,
+  },
   pin: {
     width: 30,
     height: 30,
