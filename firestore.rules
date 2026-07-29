@@ -11,29 +11,52 @@ service cloud.firestore {
       allow write: if signedIn() && request.auth.uid == uid;
     }
 
-    // Approved renames/zones are written only by Cloud Functions (the admin
-    // SDK bypasses these rules), once a proposal crosses the confirmation
-    // threshold.
+    // No Cloud Functions on the Spark plan — approved renames/zones are
+    // written directly by the confirming client, gated below on the source
+    // proposal already being "approved" (flipped by the proposals update
+    // rule once confirmCount crosses CONFIRMATION_THRESHOLD).
     match /placeOverrides/{placeId} {
       allow read: if signedIn();
-      allow write: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.sourceProposalId is string
+        && get(/databases/$(database)/documents/proposals/$(request.resource.data.sourceProposalId)).data.status == 'approved'
+        && get(/databases/$(database)/documents/proposals/$(request.resource.data.sourceProposalId)).data.payload.placeId == placeId;
+      allow delete: if false;
     }
 
     match /constructionZones/{zoneId} {
       allow read: if signedIn();
-      allow write: if false;
+      // Doc ID == source proposal ID, so no payload cross-check is needed.
+      allow create: if signedIn()
+        && get(/databases/$(database)/documents/proposals/$(zoneId)).data.status == 'approved'
+        && get(/databases/$(database)/documents/proposals/$(zoneId)).data.type == 'construction-zone';
+      allow update, delete: if false;
     }
 
     match /proposals/{proposalId} {
       allow read: if signedIn();
 
-      // Clients may create a proposal, but status/confirmCount are
-      // server-controlled from then on (mutated only by Cloud Functions).
       allow create: if signedIn()
         && request.resource.data.submittedBy == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.confirmCount == 0;
-      allow update, delete: if false;
+
+      // Confirming a proposal (client-side transaction, see
+      // proposalsRepository.ts) increments confirmCount by exactly 1 and may
+      // flip status to "approved" once the count crosses
+      // CONFIRMATION_THRESHOLD (hardcoded below as 10 — rules can't import
+      // the TS constant in constants/proposals.ts, keep both in sync).
+      allow update: if signedIn()
+        && resource.data.status == 'pending'
+        && resource.data.submittedBy != request.auth.uid
+        && request.resource.data.confirmCount == resource.data.confirmCount + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmCount', 'status', 'approvedAt'])
+        && (
+          (request.resource.data.confirmCount < 10 && request.resource.data.status == 'pending') ||
+          (request.resource.data.confirmCount >= 10 && request.resource.data.status == 'approved')
+        );
+
+      allow delete: if false;
 
       match /confirmations/{uid} {
         allow read: if signedIn();
@@ -41,8 +64,7 @@ service cloud.firestore {
         // Doc ID == uid, so a repeat attempt targets an existing document —
         // Firestore treats that as an update, which is disallowed below,
         // giving idempotent "one vote per distinct uid" counting for free.
-        // Self-confirmation is blocked here too (mirrored again in the
-        // onConfirmationCreated Cloud Function as defense in depth).
+        // Self-confirmation is blocked here too.
         allow create: if signedIn()
           && request.auth.uid == uid
           && get(/databases/$(database)/documents/proposals/$(proposalId)).data.submittedBy != request.auth.uid;
