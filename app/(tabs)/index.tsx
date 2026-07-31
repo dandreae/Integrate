@@ -48,6 +48,8 @@ export default function MapScreen() {
   const prefersAccessibleRouting = useAppStore((state) => state.prefersAccessibleRouting);
   const uid = useUserStore((state) => state.uid);
   const mapRef = useRef<MapView>(null);
+  /** Timestamp of the last marker/overlay tap — see handleMapPress for why. */
+  const lastOverlayPressRef = useRef(0);
   const { requestLocation, isLocating } = useCurrentLocation();
 
   const pendingDestinationId = useDirectionsStore((state) => state.pendingDestinationId);
@@ -117,6 +119,7 @@ export default function MapScreen() {
     filters.showAccessibleEntrances;
 
   function handleSelectPlace(place: Place) {
+    lastOverlayPressRef.current = Date.now();
     setActiveRoute(null);
     setRouteDestination(null);
     setSelectedPlace(place);
@@ -132,10 +135,12 @@ export default function MapScreen() {
   }
 
   function handleSelectConstructionZone(zone: ConstructionZone) {
+    lastOverlayPressRef.current = Date.now();
     Alert.alert(zone.title, zone.description);
   }
 
   function handleSelectProposal(proposal: Proposal) {
+    lastOverlayPressRef.current = Date.now();
     router.push({ pathname: "/proposal/[id]", params: { id: proposal.id } });
   }
 
@@ -198,6 +203,10 @@ export default function MapScreen() {
       setDraftCoordinates((previous) => [...previous, coordinate]);
       return;
     }
+    // react-native-maps (mainly Android) bubbles a marker/overlay tap through
+    // to the underlying MapView's onPress too — without this guard, tapping a
+    // pin immediately clears the selection it just set.
+    if (Date.now() - lastOverlayPressRef.current < 150) return;
     setSelectedPlace(null);
   }
 

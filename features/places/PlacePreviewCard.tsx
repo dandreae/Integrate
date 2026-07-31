@@ -70,12 +70,12 @@ export function PlacePreviewCard({
 
   return (
     <Animated.View
-      style={styles.wrapper}
+      style={[styles.wrapper, { height: panelHeight }]}
       entering={SlideInDown.springify().damping(20)}
       accessibilityViewIsModal
     >
-      <Animated.View style={dragStyle}>
-        <SafeAreaView edges={["bottom"]} style={[styles.card, { height: panelHeight }]}>
+      <Animated.View style={[styles.dragFill, dragStyle]}>
+        <SafeAreaView edges={["bottom"]} style={styles.card}>
           <GestureDetector gesture={panGesture}>
             <View style={styles.dragZone}>
               <View style={styles.handle} />
@@ -188,7 +188,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  dragFill: {
+    flex: 1,
+  },
   card: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,
