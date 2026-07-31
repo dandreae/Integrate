@@ -71,7 +71,7 @@ export function PlacePreviewCard({
   return (
     <Animated.View
       style={[styles.wrapper, { height: panelHeight }]}
-      entering={SlideInDown.springify().damping(20)}
+      entering={SlideInDown.duration(220)}
       accessibilityViewIsModal
     >
       <Animated.View style={[styles.dragFill, dragStyle]}>
