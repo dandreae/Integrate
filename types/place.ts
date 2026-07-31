@@ -40,5 +40,6 @@ export interface Place {
   studentTips: string[];
   openingHours: OpeningHours;
   imageUrl?: string;
+  websiteUrl?: string;
   isSaved: boolean;
 }

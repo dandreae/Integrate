@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -164,6 +164,18 @@ export function PlacePreviewCard({
                 {accessibilitySummary}
               </Text>
             </View>
+
+            {place.websiteUrl && (
+              <Pressable
+                onPress={() => Linking.openURL(place.websiteUrl!)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open website for ${place.officialName}`}
+                style={styles.websiteButton}
+              >
+                <Ionicons name="open-outline" size={16} color={colors.accent} />
+                <Text style={styles.websiteButtonLabel}>Visit website</Text>
+              </Pressable>
+            )}
           </ScrollView>
 
           <Pressable
@@ -271,6 +283,24 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.caption,
     color: colors.textSecondary,
+  },
+  websiteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
+  },
+  websiteButtonLabel: {
+    ...typography.caption,
+    fontWeight: "600",
+    color: colors.accent,
   },
   directionsButton: {
     height: 48,
