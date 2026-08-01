@@ -10,11 +10,13 @@ import type {
   LatLng,
   Place,
   Proposal,
-  Route,
+  RouteOption,
+  RoutePreference,
 } from "@/types";
 import { CampusMapView } from "@/features/map/CampusMapView";
 import { MapSearchBar } from "@/features/map/MapSearchBar";
 import { MapFilterSheet, type MapFilterState } from "@/features/map/MapFilterSheet";
+import { SearchResultsList } from "@/features/map/SearchResultsList";
 import { PlacePreviewCard } from "@/features/places/PlacePreviewCard";
 import { RouteSummaryBar } from "@/features/routing/RouteSummaryBar";
 import { haversineDistanceMeters } from "@/features/routing/geo";
@@ -24,6 +26,7 @@ import { IconButton } from "@/components/IconButton";
 import { MAP_FILTER_CATEGORIES } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { campusRepository, placeRepository, routeRepository } from "@/services/repositories";
+import { geocodingProvider, toSyntheticPlace } from "@/services/geocoding";
 import {
   submitConstructionZoneProposal,
   submitRenameProposal,
@@ -53,6 +56,7 @@ export default function MapScreen() {
   const { requestLocation, isLocating } = useCurrentLocation();
 
   const pendingDestinationId = useDirectionsStore((state) => state.pendingDestinationId);
+  const pendingOriginId = useDirectionsStore((state) => state.pendingOriginId);
   const clearPendingDestination = useDirectionsStore((state) => state.clearPendingDestination);
 
   const [campus, setCampus] = useState<Campus | null>(null);
@@ -61,12 +65,23 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [externalSearchResults, setExternalSearchResults] = useState<Place[]>([]);
+  const [isSearchingExternal, setIsSearchingExternal] = useState(false);
   const [filters, setFilters] = useState<MapFilterState>(DEFAULT_FILTERS);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
 
-  const [activeRoute, setActiveRoute] = useState<Route | null>(null);
+  const [routeOptions, setRouteOptions] = useState<RouteOption[] | null>(null);
+  const [selectedRoutePreference, setSelectedRoutePreference] = useState<RoutePreference>(
+    prefersAccessibleRouting ? "accessible" : "fastest"
+  );
   const [routeDestination, setRouteDestination] = useState<Place | null>(null);
+  /** Name of the chosen origin place, when routing building-to-building instead of from the user's location. */
+  const [routeOriginName, setRouteOriginName] = useState<string | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
+
+  const activeRoute =
+    routeOptions?.find((option) => option.preference === selectedRoutePreference)?.route ?? null;
 
   const [proposeSheetVisible, setProposeSheetVisible] = useState(false);
   const [isDroppingPoints, setIsDroppingPoints] = useState(false);
@@ -105,6 +120,42 @@ export default function MapScreen() {
     });
   }, [overriddenPlaces, filters.categories, searchQuery]);
 
+  // Search results beyond Integrate's curated places (e.g. "Copley Hall"),
+  // resolved via the map/geocoding service so users aren't limited to the
+  // handful of buildings we've manually added. Debounced + request-order
+  // guarded so a fast typist doesn't get a stale result flash in late.
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 3 || !campus) {
+      setExternalSearchResults([]);
+      setIsSearchingExternal(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingExternal(true);
+    const timeout = setTimeout(async () => {
+      const near = userLocation ?? { latitude: campus.latitude, longitude: campus.longitude };
+      const results = await geocodingProvider.search(query, near);
+      if (cancelled) return;
+
+      const curatedNames = new Set(
+        overriddenPlaces.map((p) => p.officialName.toLowerCase())
+      );
+      const synthetic = results
+        .filter((r) => !curatedNames.has(r.name.toLowerCase()))
+        .map((r) => toSyntheticPlace(r, selectedCampusId));
+
+      setExternalSearchResults(synthetic);
+      setIsSearchingExternal(false);
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [searchQuery, campus, userLocation, overriddenPlaces, selectedCampusId]);
+
   const selectedPlaceDistanceMeters = useMemo(() => {
     if (!selectedPlace || !userLocation) return null;
     return haversineDistanceMeters(userLocation, {
@@ -120,8 +171,9 @@ export default function MapScreen() {
 
   function handleSelectPlace(place: Place) {
     lastOverlayPressRef.current = Date.now();
-    setActiveRoute(null);
+    setRouteOptions(null);
     setRouteDestination(null);
+    setRouteOriginName(null);
     setSelectedPlace(place);
     mapRef.current?.animateToRegion(
       {
@@ -132,6 +184,11 @@ export default function MapScreen() {
       },
       400
     );
+  }
+
+  function handleSelectSearchResult(place: Place) {
+    setSearchQuery("");
+    handleSelectPlace(place);
   }
 
   function handleSelectConstructionZone(zone: ConstructionZone) {
@@ -148,38 +205,81 @@ export default function MapScreen() {
     router.push({ pathname: "/place/[id]", params: { id: place.id } });
   }
 
+  const computeAndShowRoute = useCallback(
+    async (origin: LatLng, destination: Place, originPlace?: Place) => {
+      setSelectedPlace(null);
+      setRouteDestination(destination);
+      setRouteOriginName(originPlace?.officialName ?? null);
+      setSelectedRoutePreference(prefersAccessibleRouting ? "accessible" : "fastest");
+      setIsRouting(true);
+
+      try {
+        const options = await routeRepository.getRouteOptions({
+          origin,
+          destination: { latitude: destination.latitude, longitude: destination.longitude },
+          destinationPlace: destination,
+          originPlace,
+          constructionZones,
+        });
+        setRouteOptions(options);
+
+        const preferred = options.find(
+          (o) => o.preference === (prefersAccessibleRouting ? "accessible" : "fastest")
+        );
+        const firstAvailable = options.find((o) => o.route);
+        const toShow = preferred?.route ? preferred : firstAvailable;
+        if (toShow?.route) {
+          setSelectedRoutePreference(toShow.preference);
+          mapRef.current?.fitToCoordinates(toShow.route.coordinates, {
+            edgePadding: { top: 100, right: 60, bottom: 220, left: 60 },
+            animated: false,
+          });
+        }
+      } finally {
+        setIsRouting(false);
+      }
+    },
+    [prefersAccessibleRouting, constructionZones]
+  );
+
   const handleDirections = useCallback(
     async (place: Place) => {
       const coords = userLocation ?? (await requestLocation());
       if (!coords) {
         Alert.alert(
           "Location unavailable",
-          "Enable location permissions in Settings to get directions from where you are."
+          'Enable location permissions in Settings to get directions from where you are, or tap the swap icon next to Directions to route from another place instead.'
         );
         return;
       }
       setUserLocation(coords);
-
-      const route = await routeRepository.getRoute({
-        origin: coords,
-        destination: { latitude: place.latitude, longitude: place.longitude },
-        preference: prefersAccessibleRouting ? "accessible" : "fastest",
-      });
-
-      setSelectedPlace(null);
-      setActiveRoute(route);
-      setRouteDestination(place);
-      mapRef.current?.fitToCoordinates(route.coordinates, {
-        edgePadding: { top: 100, right: 60, bottom: 220, left: 60 },
-        animated: true,
-      });
+      await computeAndShowRoute(coords, place);
     },
-    [userLocation, requestLocation, prefersAccessibleRouting]
+    [userLocation, requestLocation, computeAndShowRoute]
   );
 
+  const handleDirectionsBetween = useCallback(
+    async (origin: Place, destination: Place) => {
+      await computeAndShowRoute({ latitude: origin.latitude, longitude: origin.longitude }, destination, origin);
+    },
+    [computeAndShowRoute]
+  );
+
+  function handleSelectRoutePreference(preference: RoutePreference) {
+    setSelectedRoutePreference(preference);
+    const option = routeOptions?.find((o) => o.preference === preference);
+    if (option?.route) {
+      mapRef.current?.fitToCoordinates(option.route.coordinates, {
+        edgePadding: { top: 100, right: 60, bottom: 220, left: 60 },
+        animated: false,
+      });
+    }
+  }
+
   function handleClearRoute() {
-    setActiveRoute(null);
+    setRouteOptions(null);
     setRouteDestination(null);
+    setRouteOriginName(null);
   }
 
   async function handleLocatePress() {
@@ -275,12 +375,25 @@ export default function MapScreen() {
   // map, which is the only place that actually knows how to draw a route.
   useEffect(() => {
     if (!pendingDestinationId) return;
-    const place = overriddenPlaces.find((candidate) => candidate.id === pendingDestinationId);
+    const destination = overriddenPlaces.find((candidate) => candidate.id === pendingDestinationId);
+    const origin = pendingOriginId
+      ? overriddenPlaces.find((candidate) => candidate.id === pendingOriginId)
+      : null;
     clearPendingDestination();
-    if (place) {
-      handleDirections(place);
+    if (!destination) return;
+    if (origin) {
+      handleDirectionsBetween(origin, destination);
+    } else {
+      handleDirections(destination);
     }
-  }, [pendingDestinationId, overriddenPlaces, clearPendingDestination, handleDirections]);
+  }, [
+    pendingDestinationId,
+    pendingOriginId,
+    overriddenPlaces,
+    clearPendingDestination,
+    handleDirections,
+    handleDirectionsBetween,
+  ]);
 
   if (!campus) {
     return <View style={styles.container} />;
@@ -314,8 +427,22 @@ export default function MapScreen() {
             onFilterPress={() => setFilterSheetVisible(true)}
             filterActive={filtersActive}
           />
+          {searchQuery.trim().length > 0 && !selectedPlace && (
+            <SearchResultsList
+              results={filteredPlaces}
+              externalResults={externalSearchResults}
+              isSearchingExternal={isSearchingExternal}
+              onSelect={handleSelectSearchResult}
+            />
+          )}
         </View>
       </SafeAreaView>
+
+      {isRouting && (
+        <View style={styles.routingBanner} pointerEvents="none">
+          <Text style={styles.routingBannerText}>Finding walking route…</Text>
+        </View>
+      )}
 
       {!isDroppingPoints && (
         <>
@@ -364,17 +491,22 @@ export default function MapScreen() {
       {selectedPlace && !isDroppingPoints && (
         <PlacePreviewCard
           place={selectedPlace}
+          places={overriddenPlaces}
           distanceMeters={selectedPlaceDistanceMeters}
           onClose={() => setSelectedPlace(null)}
           onOpenDetail={handleOpenDetail}
           onDirections={handleDirections}
+          onDirectionsFrom={handleDirectionsBetween}
         />
       )}
 
-      {activeRoute && routeDestination && !selectedPlace && (
+      {routeOptions && routeDestination && !selectedPlace && (
         <RouteSummaryBar
           destinationName={routeDestination.officialName}
-          route={activeRoute}
+          originName={routeOriginName}
+          routeOptions={routeOptions}
+          selectedPreference={selectedRoutePreference}
+          onSelectPreference={handleSelectRoutePreference}
           onClose={handleClearRoute}
         />
       )}
@@ -421,6 +553,20 @@ const styles = StyleSheet.create({
   searchWrapper: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+  },
+  routingBanner: {
+    position: "absolute",
+    top: 64,
+    alignSelf: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    ...shadow.card,
+  },
+  routingBannerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   locateButtonWrapper: {
     position: "absolute",

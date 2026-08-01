@@ -8,12 +8,20 @@ interface DirectionsState {
    * signal, not durable app state.
    */
   pendingDestinationId: string | null;
-  requestDirections: (placeId: string) => void;
+  /**
+   * Optional companion to pendingDestinationId: when set, route FROM this
+   * place instead of the user's current location — enables "building to
+   * building" directions without needing (or waiting on) GPS.
+   */
+  pendingOriginId: string | null;
+  requestDirections: (destinationId: string, originId?: string | null) => void;
   clearPendingDestination: () => void;
 }
 
 export const useDirectionsStore = create<DirectionsState>((set) => ({
   pendingDestinationId: null,
-  requestDirections: (placeId) => set({ pendingDestinationId: placeId }),
-  clearPendingDestination: () => set({ pendingDestinationId: null }),
+  pendingOriginId: null,
+  requestDirections: (destinationId, originId = null) =>
+    set({ pendingDestinationId: destinationId, pendingOriginId: originId }),
+  clearPendingDestination: () => set({ pendingDestinationId: null, pendingOriginId: null }),
 }));

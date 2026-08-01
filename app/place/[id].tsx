@@ -8,6 +8,7 @@ import { Badge } from "@/components/Badge";
 import { ACCESSIBILITY_FEATURE_META, PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
 import { getAccessibilitySummary } from "@/features/places/accessibilitySummary";
+import { PlacePickerSheet } from "@/features/places/PlacePickerSheet";
 import { formatDistanceMeters, haversineDistanceMeters } from "@/features/routing/geo";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
@@ -23,6 +24,8 @@ export default function PlaceDetailScreen() {
   const [rawPlace, setRawPlace] = useState<Place | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [campusPlaces, setCampusPlaces] = useState<Place[]>([]);
+  const [originPickerVisible, setOriginPickerVisible] = useState(false);
   const placeOverrides = usePlaceOverrides();
 
   const place = useMemo(
@@ -47,6 +50,11 @@ export default function PlaceDetailScreen() {
     requestLocation({ silent: true }).then(setUserLocation);
   }, [requestLocation]);
 
+  useEffect(() => {
+    if (!place) return;
+    placeRepository.getPlacesByCampus(place.campusId).then(setCampusPlaces);
+  }, [place?.campusId]);
+
   const distanceMeters = useMemo(() => {
     if (!place || !userLocation) return null;
     return haversineDistanceMeters(userLocation, {
@@ -58,6 +66,13 @@ export default function PlaceDetailScreen() {
   function handleDirections() {
     if (!place) return;
     requestDirections(place.id);
+    router.back();
+  }
+
+  function handleDirectionsFrom(origin: Place) {
+    if (!place) return;
+    setOriginPickerVisible(false);
+    requestDirections(place.id, origin.id);
     router.back();
   }
 
@@ -204,16 +219,35 @@ export default function PlaceDetailScreen() {
       </ScrollView>
 
       <SafeAreaView edges={["bottom"]} style={styles.footer}>
-        <Pressable
-          onPress={handleDirections}
-          accessibilityRole="button"
-          accessibilityLabel={`Get directions to ${place.officialName}`}
-          style={styles.directionsButton}
-        >
-          <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
-          <Text style={styles.directionsLabel}>Directions</Text>
-        </Pressable>
+        <View style={styles.directionsRow}>
+          <Pressable
+            onPress={handleDirections}
+            accessibilityRole="button"
+            accessibilityLabel={`Get directions to ${place.officialName}`}
+            style={styles.directionsButton}
+          >
+            <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
+            <Text style={styles.directionsLabel}>Directions</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setOriginPickerVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Get directions to ${place.officialName} from another place, without using your location`}
+            style={styles.fromAnotherPlaceButton}
+          >
+            <Ionicons name="swap-vertical-outline" size={20} color={colors.accent} />
+          </Pressable>
+        </View>
       </SafeAreaView>
+
+      <PlacePickerSheet
+        visible={originPickerVisible}
+        title={`Directions to ${place.officialName} from...`}
+        places={campusPlaces}
+        excludePlaceId={place.id}
+        onClose={() => setOriginPickerVisible(false)}
+        onSelect={handleDirectionsFrom}
+      />
     </View>
   );
 }
@@ -340,7 +374,12 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
+  directionsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
   directionsButton: {
+    flex: 1,
     height: 52,
     borderRadius: radii.md,
     alignItems: "center",
@@ -349,6 +388,14 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.accent,
     ...shadow.card,
+  },
+  fromAnotherPlaceButton: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accentMuted,
   },
   directionsLabel: {
     ...typography.bodyStrong,

@@ -1,6 +1,8 @@
 import { MockCampusRepository } from "./mock/MockCampusRepository";
 import { MockPlaceRepository } from "./mock/MockPlaceRepository";
-import { MockRouteRepository } from "./mock/MockRouteRepository";
+import { RealRouteRepository } from "./RealRouteRepository";
+import { ValhallaRoutingProvider } from "../routing/valhalla/ValhallaRoutingProvider";
+import { MockRoutingProvider } from "../routing/mock/MockRoutingProvider";
 
 export type { CampusRepository } from "./CampusRepository";
 export type { PlaceRepository } from "./PlaceRepository";
@@ -13,4 +15,4 @@ export type { RouteRepository } from "./RouteRepository";
  */
 export const campusRepository = new MockCampusRepository();
 export const placeRepository = new MockPlaceRepository();
-export const routeRepository = new MockRouteRepository();
+export const routeRepository = new RealRouteRepository(new ValhallaRoutingProvider(), new MockRoutingProvider());

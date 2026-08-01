@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -6,7 +7,6 @@ import Animated, {
   SlideInDown,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 import { getAccessibilitySummary } from "./accessibilitySummary";
+import { PlacePickerSheet } from "./PlacePickerSheet";
 import { formatDistanceMeters } from "@/features/routing/geo";
 
 const DISMISS_THRESHOLD = 90;
@@ -23,19 +24,27 @@ const DISMISS_VELOCITY = 800;
 
 interface PlacePreviewCardProps {
   place: Place;
+  places: Place[];
   distanceMeters: number | null;
   onClose: () => void;
   onOpenDetail: (place: Place) => void;
   onDirections: (place: Place) => void;
+  onDirectionsFrom: (origin: Place, destination: Place) => void;
 }
 
 export function PlacePreviewCard({
   place,
+  places,
   distanceMeters,
   onClose,
   onOpenDetail,
   onDirections,
+  onDirectionsFrom,
 }: PlacePreviewCardProps) {
+  const [originPickerVisible, setOriginPickerVisible] = useState(false);
+  // Places found via the map/geocoding service (see services/geocoding) rather than
+  // curated in data/places.ts — there's no full detail page for these to open.
+  const isCurated = !place.id.startsWith("osm:");
   const isSaved = useSavedPlacesStore((state) => state.isSaved(place.id));
   const toggleSaved = useSavedPlacesStore((state) => state.toggleSaved);
   const meta = PLACE_CATEGORY_META[place.category];
@@ -64,7 +73,7 @@ export function PlacePreviewCard({
         translateY.value = withTiming(400, { duration: 150 });
         runOnJS(close)();
       } else {
-        translateY.value = withSpring(0, { damping: 18 });
+        translateY.value = withTiming(0, { duration: 150 });
       }
     });
 
@@ -85,14 +94,15 @@ export function PlacePreviewCard({
           <View style={styles.headerRow}>
             <Pressable
               style={styles.headerText}
-              onPress={() => onOpenDetail(place)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open full details for ${place.officialName}`}
+              onPress={isCurated ? () => onOpenDetail(place) : undefined}
+              accessibilityRole={isCurated ? "button" : undefined}
+              accessibilityLabel={isCurated ? `Open full details for ${place.officialName}` : undefined}
             >
               <Text style={styles.officialName}>{place.officialName}</Text>
               {place.localName && (
                 <Text style={styles.localName}>Students call it "{place.localName}"</Text>
               )}
+              {!isCurated && <Text style={styles.mapDataBadge}>From map data</Text>}
             </Pressable>
             <View style={styles.headerActions}>
               <Pressable
@@ -178,17 +188,39 @@ export function PlacePreviewCard({
             )}
           </ScrollView>
 
-          <Pressable
-            onPress={() => onDirections(place)}
-            accessibilityRole="button"
-            accessibilityLabel={`Get directions to ${place.officialName}`}
-            style={styles.directionsButton}
-          >
-            <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
-            <Text style={styles.directionsLabel}>Directions</Text>
-          </Pressable>
+          <View style={styles.directionsRow}>
+            <Pressable
+              onPress={() => onDirections(place)}
+              accessibilityRole="button"
+              accessibilityLabel={`Get directions to ${place.officialName}`}
+              style={styles.directionsButton}
+            >
+              <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
+              <Text style={styles.directionsLabel}>Directions</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setOriginPickerVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Get directions to ${place.officialName} from another place, without using your location`}
+              style={styles.fromAnotherPlaceButton}
+            >
+              <Ionicons name="swap-vertical-outline" size={20} color={colors.accent} />
+            </Pressable>
+          </View>
         </SafeAreaView>
       </Animated.View>
+
+      <PlacePickerSheet
+        visible={originPickerVisible}
+        title={`Directions to ${place.officialName} from...`}
+        places={places}
+        excludePlaceId={place.id}
+        onClose={() => setOriginPickerVisible(false)}
+        onSelect={(origin) => {
+          setOriginPickerVisible(false);
+          onDirectionsFrom(origin, place);
+        }}
+      />
     </Animated.View>
   );
 }
@@ -249,6 +281,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  mapDataBadge: {
+    ...typography.label,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textTransform: "uppercase",
+  },
   headerActions: {
     flexDirection: "row",
   },
@@ -302,15 +340,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.accent,
   },
+  directionsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
   directionsButton: {
+    flex: 1,
     height: 48,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 6,
-    marginTop: spacing.lg,
     backgroundColor: colors.accent,
+  },
+  fromAnotherPlaceButton: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accentMuted,
   },
   directionsLabel: {
     ...typography.bodyStrong,
