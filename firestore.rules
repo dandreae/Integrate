@@ -103,5 +103,32 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // Discover feed posts (events people share, restaurant deals,
+    // announcements) — a casual community feed, visible immediately on
+    // submission like accessibility reports, not gated behind confirmations.
+    match /discoverPosts/{postId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.upvotes == 0
+        && request.resource.data.placeId is string
+        && request.resource.data.placeId.size() > 0;
+
+      // Only an upvote bump (handled transactionally alongside an
+      // upvotes/{uid} doc, same idempotency trick as proposals/reports above).
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes'])
+        && request.resource.data.upvotes == resource.data.upvotes + 1;
+
+      allow delete: if false;
+
+      match /upvotes/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow update, delete: if false;
+      }
+    }
   }
 }

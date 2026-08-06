@@ -1,12 +1,14 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import MapView, { Marker, Polyline, type MapPressEvent, type PoiClickEvent, type Region } from "react-native-maps";
-import type { Campus, ConstructionZone, LatLng, Place, Proposal, Route } from "@/types";
+import type { Campus, CampusEvent, ConstructionZone, LatLng, Place, Proposal, Route } from "@/types";
 import { colors, radii, shadow } from "@/constants/theme";
 import { PlaceMarker } from "./PlaceMarker";
+import { EventMarker } from "./EventMarker";
 import { ConstructionZoneOverlay } from "./ConstructionZoneOverlay";
 import { AccessibleEntranceMarker } from "./AccessibleEntranceMarker";
 import { PendingProposalOverlay } from "@/features/edits/PendingProposalOverlay";
+import { isPastEvent } from "@/features/events/eventDate";
 
 export interface MapPoiSelection {
   name: string;
@@ -18,8 +20,10 @@ interface CampusMapViewProps {
   places: Place[];
   constructionZones: ConstructionZone[];
   pendingProposals: Proposal[];
+  events: CampusEvent[];
   showConstruction: boolean;
   showAccessibleEntrances: boolean;
+  showEvents: boolean;
   selectedPlaceId: string | null;
   /** True while a search query is narrowing `places` — forces labels on for every result, bypassing zoom culling. */
   searchActive: boolean;
@@ -29,6 +33,7 @@ interface CampusMapViewProps {
   onSelectPlace: (place: Place) => void;
   onSelectConstructionZone: (zone: ConstructionZone) => void;
   onSelectProposal: (proposal: Proposal) => void;
+  onSelectEvent: (event: CampusEvent, place: Place) => void;
   onMapPress: (coordinate: LatLng) => void;
   /**
    * Tapping a titled point of interest baked into the map tiles themselves
@@ -133,8 +138,10 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     places,
     constructionZones,
     pendingProposals,
+    events,
     showConstruction,
     showAccessibleEntrances,
+    showEvents,
     selectedPlaceId,
     searchActive,
     activeRoute,
@@ -142,6 +149,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     onSelectPlace,
     onSelectConstructionZone,
     onSelectProposal,
+    onSelectEvent,
     onMapPress,
     onSelectPoi,
   },
@@ -163,6 +171,30 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     () => computeLabelVisiblePlaceIds(places, region, mapSize, searchActive, selectedPlaceId),
     [places, region, mapSize, searchActive, selectedPlaceId]
   );
+
+  // Resolves each event's locationId to a real place (and nudges the pin a
+  // few meters off that place's own marker so the two don't sit exactly on
+  // top of each other) — events whose locationId doesn't match a known
+  // place are silently skipped rather than guessing a coordinate for them.
+  const resolvedEvents = useMemo(() => {
+    if (!showEvents) return [];
+    return events
+      .filter((event) => !isPastEvent(event.date))
+      .map((event) => {
+        const place = places.find((p) => p.id === event.locationId);
+        if (!place) return null;
+        const offsetDegrees = 0.00009; // ~10m
+        return {
+          event,
+          place,
+          coordinate: {
+            latitude: place.latitude + offsetDegrees,
+            longitude: place.longitude + offsetDegrees,
+          },
+        };
+      })
+      .filter((resolved): resolved is { event: CampusEvent; place: Place; coordinate: LatLng } => resolved !== null);
+  }, [events, places, showEvents]);
 
   function handlePress(event: MapPressEvent) {
     onMapPress(event.nativeEvent.coordinate);
@@ -207,6 +239,15 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
             proposal={proposal}
             places={places}
             onPress={onSelectProposal}
+          />
+        ))}
+
+        {resolvedEvents.map(({ event, place, coordinate }) => (
+          <EventMarker
+            key={event.id}
+            event={event}
+            coordinate={coordinate}
+            onPress={() => onSelectEvent(event, place)}
           />
         ))}
 

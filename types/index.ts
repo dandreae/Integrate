@@ -6,3 +6,4 @@ export * from "./event";
 export * from "./route";
 export * from "./proposal";
 export * from "./accessibilityReport";
+export * from "./discoverPost";

@@ -14,6 +14,7 @@ export interface MapFilterState {
   categories: Set<PlaceCategory>;
   showConstruction: boolean;
   showAccessibleEntrances: boolean;
+  showEvents: boolean;
 }
 
 interface MapFilterSheetProps {
@@ -39,6 +40,7 @@ export function MapFilterSheet({ visible, filters, onChange, onClose }: MapFilte
       categories: new Set(MAP_FILTER_CATEGORIES),
       showConstruction: true,
       showAccessibleEntrances: false,
+      showEvents: true,
     });
   }
 
@@ -130,6 +132,20 @@ export function MapFilterSheet({ visible, filters, onChange, onClose }: MapFilte
               >
                 Accessible entrances
               </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onChange({ ...filters, showEvents: !filters.showEvents })}
+              accessibilityRole="button"
+              accessibilityLabel="Show campus events"
+              accessibilityState={{ selected: filters.showEvents }}
+              style={[styles.chip, filters.showEvents && { backgroundColor: colors.accent }]}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={filters.showEvents ? colors.textInverse : colors.textPrimary}
+              />
+              <Text style={[styles.chipLabel, filters.showEvents && styles.chipLabelActive]}>Events</Text>
             </Pressable>
           </View>
         </ScrollView>

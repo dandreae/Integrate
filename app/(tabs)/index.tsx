@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import type {
   AccessibilityIssueType,
   Campus,
+  CampusEvent,
   ConstructionSeverity,
   ConstructionZone,
   LatLng,
@@ -23,6 +24,7 @@ import { RouteSummaryBar } from "@/features/routing/RouteSummaryBar";
 import { haversineDistanceMeters } from "@/features/routing/geo";
 import { ProposeEditSheet } from "@/features/edits/ProposeEditSheet";
 import { ConstructionZoneFormSheet } from "@/features/edits/ConstructionZoneFormSheet";
+import { EventDetailSheet } from "@/features/events/EventDetailSheet";
 import { IconButton } from "@/components/IconButton";
 import { MAP_FILTER_CATEGORIES } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
@@ -55,6 +57,7 @@ const DEFAULT_FILTERS: MapFilterState = {
   categories: new Set(MAP_FILTER_CATEGORIES),
   showConstruction: true,
   showAccessibleEntrances: false,
+  showEvents: true,
 };
 
 export default function MapScreen() {
@@ -73,6 +76,8 @@ export default function MapScreen() {
   const [campus, setCampus] = useState<Campus | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [seedConstructionZones, setSeedConstructionZones] = useState<ConstructionZone[]>([]);
+  const [events, setEvents] = useState<CampusEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<{ event: CampusEvent; place: Place } | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -112,6 +117,7 @@ export default function MapScreen() {
     campusRepository.getCampusById(selectedCampusId).then((result) => setCampus(result ?? null));
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
     campusRepository.getConstructionZones(selectedCampusId).then(setSeedConstructionZones);
+    campusRepository.getEvents(selectedCampusId).then(setEvents);
   }, [selectedCampusId]);
 
   // Best-effort pool of every named building/amenity on campus, used only to
@@ -326,6 +332,19 @@ export default function MapScreen() {
   function handleSelectProposal(proposal: Proposal) {
     lastOverlayPressRef.current = Date.now();
     router.push({ pathname: "/proposal/[id]", params: { id: proposal.id } });
+  }
+
+  function handleSelectEvent(event: CampusEvent, place: Place) {
+    lastOverlayPressRef.current = Date.now();
+    Keyboard.dismiss();
+    setSelectedEvent({ event, place });
+  }
+
+  function handleEventDirections() {
+    if (!selectedEvent) return;
+    const { place } = selectedEvent;
+    setSelectedEvent(null);
+    handleDirections(place);
   }
 
   function handleOpenDetail(place: Place) {
@@ -563,8 +582,10 @@ export default function MapScreen() {
         places={mapMarkerPlaces}
         constructionZones={constructionZones}
         pendingProposals={pendingProposals}
+        events={events}
         showConstruction={filters.showConstruction}
         showAccessibleEntrances={filters.showAccessibleEntrances}
+        showEvents={filters.showEvents}
         selectedPlaceId={selectedPlace?.id ?? null}
         searchActive={searchQuery.trim().length > 0}
         activeRoute={activeRoute}
@@ -572,6 +593,7 @@ export default function MapScreen() {
         onSelectPlace={handleSelectPlace}
         onSelectConstructionZone={handleSelectConstructionZone}
         onSelectProposal={handleSelectProposal}
+        onSelectEvent={handleSelectEvent}
         onMapPress={handleMapPress}
         onSelectPoi={handleSelectPoi}
       />
@@ -700,6 +722,13 @@ export default function MapScreen() {
           setDraftCoordinates([]);
         }}
         onSubmit={handleSubmitConstructionZone}
+      />
+
+      <EventDetailSheet
+        event={selectedEvent?.event ?? null}
+        placeName={selectedEvent?.place.officialName ?? null}
+        onClose={() => setSelectedEvent(null)}
+        onGetDirections={handleEventDirections}
       />
     </View>
   );

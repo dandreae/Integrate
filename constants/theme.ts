@@ -46,6 +46,22 @@ export const categoryColors: Record<string, string> = {
   accessible: "#22A6B3",
 };
 
+export const eventCategoryColors: Record<string, string> = {
+  sports: "#D9534F",
+  concert: "#9B59B6",
+  social: "#C23F9C",
+  academic: "#3B5FE0",
+  market: "#4FAE32",
+  meeting: "#4A90A4",
+};
+
+export const discoverPostTypeColors: Record<string, string> = {
+  promotion: "#2E86AB",
+  deal: "#4FAE32",
+  event: "#C23F9C",
+  "student-post": "#E07C3B",
+};
+
 export const spacing = {
   xs: 4,
   sm: 8,

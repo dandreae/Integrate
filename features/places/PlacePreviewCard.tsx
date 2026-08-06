@@ -166,6 +166,19 @@ export function PlacePreviewCard({
 
             <Text style={styles.description}>{place.description}</Text>
 
+            {place.studentTips.length > 0 && (
+              <View style={styles.tipBanner}>
+                <Ionicons name="bulb-outline" size={16} color={colors.accent} />
+                <View style={styles.tipTextGroup}>
+                  {place.studentTips.map((tip, index) => (
+                    <Text key={index} style={styles.tipBannerText}>
+                      {tip}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <View style={styles.metaRow}>
               {distanceMeters != null && (
                 <View style={styles.metaItem}>
@@ -345,6 +358,23 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textPrimary,
     marginTop: spacing.md,
+  },
+  tipBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    backgroundColor: colors.accentMuted,
+  },
+  tipTextGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  tipBannerText: {
+    ...typography.caption,
+    color: colors.accent,
   },
   metaRow: {
     flexDirection: "row",

@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import type { Ionicons } from "@expo/vector-icons";
-import type { AccessibilityFeature, PlaceCategory } from "@/types";
-import { categoryColors } from "./theme";
+import type { AccessibilityFeature, DiscoverPostType, EventCategory, PlaceCategory } from "@/types";
+import { categoryColors, discoverPostTypeColors, eventCategoryColors } from "./theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -21,6 +21,26 @@ export const PLACE_CATEGORY_META: Record<PlaceCategory, CategoryMeta> = {
   parking: { label: "Parking", icon: "car-outline", color: categoryColors.parking },
   resource: { label: "Campus resources", icon: "heart-outline", color: categoryColors.resource },
   gathering: { label: "Gathering spots", icon: "people-outline", color: categoryColors.gathering },
+};
+
+export const EVENT_CATEGORY_META: Record<EventCategory, CategoryMeta> = {
+  sports: { label: "Sports", icon: "trophy-outline", color: eventCategoryColors.sports },
+  concert: { label: "Concert", icon: "musical-notes-outline", color: eventCategoryColors.concert },
+  social: { label: "Social", icon: "people-outline", color: eventCategoryColors.social },
+  academic: { label: "Academic", icon: "school-outline", color: eventCategoryColors.academic },
+  market: { label: "Market", icon: "basket-outline", color: eventCategoryColors.market },
+  meeting: { label: "Meeting", icon: "chatbubbles-outline", color: eventCategoryColors.meeting },
+};
+
+export const DISCOVER_POST_TYPE_META: Record<DiscoverPostType, CategoryMeta> = {
+  promotion: { label: "Promotion", icon: "storefront-outline", color: discoverPostTypeColors.promotion },
+  deal: { label: "Deal", icon: "pricetag-outline", color: discoverPostTypeColors.deal },
+  event: { label: "Event", icon: "calendar-outline", color: discoverPostTypeColors.event },
+  "student-post": {
+    label: "Student post",
+    icon: "chatbubble-ellipses-outline",
+    color: discoverPostTypeColors["student-post"],
+  },
 };
 
 export const CONSTRUCTION_META: CategoryMeta = {
