@@ -13,7 +13,7 @@ import type {
   RouteOption,
   RoutePreference,
 } from "@/types";
-import { CampusMapView } from "@/features/map/CampusMapView";
+import { CampusMapView, type MapPoiSelection } from "@/features/map/CampusMapView";
 import { MapSearchBar } from "@/features/map/MapSearchBar";
 import { MapFilterSheet, type MapFilterState } from "@/features/map/MapFilterSheet";
 import { SearchResultsList } from "@/features/map/SearchResultsList";
@@ -26,7 +26,16 @@ import { IconButton } from "@/components/IconButton";
 import { MAP_FILTER_CATEGORIES } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { campusRepository, placeRepository, routeRepository } from "@/services/repositories";
-import { geocodingProvider, toSyntheticPlace } from "@/services/geocoding";
+import {
+  expandNicknameAlias,
+  fetchNearbyNamedFeatures,
+  geocodingProvider,
+  looksLikeAbbreviation,
+  matchesAbbreviation,
+  toDroppedPinPlace,
+  toSyntheticPlace,
+  type GeocodeResult,
+} from "@/services/geocoding";
 import {
   submitConstructionZoneProposal,
   submitRenameProposal,
@@ -67,6 +76,9 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [externalSearchResults, setExternalSearchResults] = useState<Place[]>([]);
   const [isSearchingExternal, setIsSearchingExternal] = useState(false);
+  const [possibleAbbreviationMatches, setPossibleAbbreviationMatches] = useState<Place[]>([]);
+  /** Every named building/amenity on campus, from live map data — the pool the abbreviation guesser checks against. Best-effort, fetched once. */
+  const [nearbyFeatures, setNearbyFeatures] = useState<GeocodeResult[]>([]);
   const [filters, setFilters] = useState<MapFilterState>(DEFAULT_FILTERS);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -79,6 +91,7 @@ export default function MapScreen() {
   /** Name of the chosen origin place, when routing building-to-building instead of from the user's location. */
   const [routeOriginName, setRouteOriginName] = useState<string | null>(null);
   const [isRouting, setIsRouting] = useState(false);
+  const [isResolvingTap, setIsResolvingTap] = useState(false);
 
   const activeRoute =
     routeOptions?.find((option) => option.preference === selectedRoutePreference)?.route ?? null;
@@ -97,6 +110,20 @@ export default function MapScreen() {
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
     campusRepository.getConstructionZones(selectedCampusId).then(setSeedConstructionZones);
   }, [selectedCampusId]);
+
+  // Best-effort pool of every named building/amenity on campus, used only to
+  // guess at abbreviations (e.g. "ICC") during search — never blocks or
+  // affects normal search if it fails or is still loading.
+  useEffect(() => {
+    if (!campus) return;
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = campus.mapRegion;
+    fetchNearbyNamedFeatures({
+      south: latitude - latitudeDelta / 2,
+      north: latitude + latitudeDelta / 2,
+      west: longitude - longitudeDelta / 2,
+      east: longitude + longitudeDelta / 2,
+    }).then(setNearbyFeatures);
+  }, [campus]);
 
   useEffect(() => {
     requestLocation({ silent: true }).then(setUserLocation);
@@ -124,8 +151,31 @@ export default function MapScreen() {
   // resolved via the map/geocoding service so users aren't limited to the
   // handful of buildings we've manually added. Debounced + request-order
   // guarded so a fast typist doesn't get a stale result flash in late.
+  //
+  // Deliberately biased to the CAMPUS center, not `userLocation` — a device
+  // location simulator (or a student a few blocks off campus) can put
+  // userLocation far enough away that every real on-campus match gets
+  // discarded by the geocoder's own proximity relevance/distance filtering,
+  // silently returning zero results with no error to show for it. This bit
+  // us for real: the iOS Simulator here defaults to Cupertino, CA, ~3,800km
+  // from Georgetown, which is exactly what was causing "Yates" to come up
+  // empty. See the identical fix for routing coverage for the same reasoning.
   useEffect(() => {
     const query = searchQuery.trim();
+
+    // Abbreviation guessing is local/instant (checked against the
+    // pre-fetched nearby-features pool) — no reason to gate it behind the
+    // same length/debounce as the network geocoding search below.
+    if (query.length >= 2 && looksLikeAbbreviation(query)) {
+      const curatedNames = new Set(overriddenPlaces.map((p) => p.officialName.toLowerCase()));
+      const guesses = nearbyFeatures
+        .filter((f) => matchesAbbreviation(query, f.name) && !curatedNames.has(f.name.toLowerCase()))
+        .map((f) => toSyntheticPlace(f, selectedCampusId));
+      setPossibleAbbreviationMatches(guesses);
+    } else {
+      setPossibleAbbreviationMatches([]);
+    }
+
     if (query.length < 3 || !campus) {
       setExternalSearchResults([]);
       setIsSearchingExternal(false);
@@ -134,16 +184,29 @@ export default function MapScreen() {
 
     let cancelled = false;
     setIsSearchingExternal(true);
+    const near = { latitude: campus.latitude, longitude: campus.longitude };
+    // A known nickname (e.g. "ICC") gets searched under its real name too —
+    // the alias only ever rewrites search TEXT, the coordinate that comes
+    // back is always a live lookup, never a stored/guessed location.
+    const alias = expandNicknameAlias(query);
     const timeout = setTimeout(async () => {
-      const near = userLocation ?? { latitude: campus.latitude, longitude: campus.longitude };
-      const results = await geocodingProvider.search(query, near);
+      const [directResults, aliasResults] = await Promise.all([
+        geocodingProvider.search(query, near),
+        alias ? geocodingProvider.search(alias, near) : Promise.resolve([]),
+      ]);
       if (cancelled) return;
 
       const curatedNames = new Set(
         overriddenPlaces.map((p) => p.officialName.toLowerCase())
       );
-      const synthetic = results
-        .filter((r) => !curatedNames.has(r.name.toLowerCase()))
+      const seen = new Set<string>();
+      const synthetic = [...directResults, ...aliasResults]
+        .filter((r) => {
+          const key = r.name.toLowerCase();
+          if (curatedNames.has(key) || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
         .map((r) => toSyntheticPlace(r, selectedCampusId));
 
       setExternalSearchResults(synthetic);
@@ -154,7 +217,31 @@ export default function MapScreen() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [searchQuery, campus, userLocation, overriddenPlaces, selectedCampusId]);
+  }, [searchQuery, campus, overriddenPlaces, selectedCampusId, nearbyFeatures]);
+
+  // Don't show the same building twice if it's both a confirmed map match
+  // and coincidentally initials-matches the query.
+  const dedupedPossibleMatches = useMemo(() => {
+    const confirmedNames = new Set(externalSearchResults.map((p) => p.officialName.toLowerCase()));
+    return possibleAbbreviationMatches.filter((p) => !confirmedNames.has(p.officialName.toLowerCase()));
+  }, [possibleAbbreviationMatches, externalSearchResults]);
+
+  // While actively searching, show map/geocoding results as real pins on the
+  // map too — not just rows in the dropdown — so "search finds it" and
+  // "it's there on the map" are the same thing, not two disconnected UIs.
+  const mapMarkerPlaces = useMemo(() => {
+    const base =
+      searchQuery.trim().length > 0 && externalSearchResults.length > 0
+        ? [...filteredPlaces, ...externalSearchResults]
+        : filteredPlaces;
+    // Keep the selected pin visible even after the search that found it is
+    // cleared (curated places already stay put; only non-curated results
+    // disappear from `base` once the query resets, so patch that back in).
+    if (selectedPlace && !base.some((p) => p.id === selectedPlace.id)) {
+      return [...base, selectedPlace];
+    }
+    return base;
+  }, [filteredPlaces, externalSearchResults, searchQuery, selectedPlace]);
 
   const selectedPlaceDistanceMeters = useMemo(() => {
     if (!selectedPlace || !userLocation) return null;
@@ -184,6 +271,42 @@ export default function MapScreen() {
       },
       400
     );
+  }
+
+  // Lets users select ANY real building, not just the handful curated in
+  // data/places.ts (e.g. Copley Hall) — resolves the tapped spot via the
+  // map/geocoding service, falling back to a generic dropped pin if nothing
+  // is nearby, so the interaction never dead-ends. Triggered by a plain tap
+  // when the map is otherwise idle (see handleMapPress) — deliberately NOT
+  // long-press: registering both onPress and onLongPress on the native map
+  // makes the OS gesture recognizer delay every tap while it waits to see
+  // whether it turns into a long-press, which made the whole map feel
+  // sluggish to tap on.
+  async function resolveAndSelectMapLocation(coordinate: LatLng) {
+    if (isDroppingPoints) return;
+    lastOverlayPressRef.current = Date.now();
+    setIsResolvingTap(true);
+    try {
+      const result = await geocodingProvider.reverse(coordinate);
+      const place = result ? toSyntheticPlace(result, selectedCampusId) : toDroppedPinPlace(coordinate, selectedCampusId);
+      handleSelectPlace(place);
+    } finally {
+      setIsResolvingTap(false);
+    }
+  }
+
+  // Tapping a titled point of interest baked into the map tiles themselves
+  // (e.g. "Boarman Family Cemetery") — the name comes directly from the map
+  // SDK, so this works for anything the map itself labels, not just what a
+  // geocoder happens to index. iOS only fires this with the Google Maps
+  // provider; on Apple Maps, long-press (above) is the fallback.
+  function handleSelectPoi(poi: MapPoiSelection) {
+    lastOverlayPressRef.current = Date.now();
+    const place = toSyntheticPlace(
+      { name: poi.name, latitude: poi.coordinate.latitude, longitude: poi.coordinate.longitude },
+      selectedCampusId
+    );
+    handleSelectPlace(place);
   }
 
   function handleSelectSearchResult(place: Place) {
@@ -307,7 +430,19 @@ export default function MapScreen() {
     // to the underlying MapView's onPress too — without this guard, tapping a
     // pin immediately clears the selection it just set.
     if (Date.now() - lastOverlayPressRef.current < 150) return;
-    setSelectedPlace(null);
+
+    // First tap dismisses whatever's already open (matches how the close
+    // button/route-clear already behave). Only once the map is idle does a
+    // plain tap resolve the tapped spot to a place — this is what lets
+    // users route to any point on the map, not just curated markers,
+    // without a tap-to-dismiss turning into an unwanted new selection.
+    if (selectedPlace || routeOptions) {
+      setSelectedPlace(null);
+      handleClearRoute();
+      return;
+    }
+
+    resolveAndSelectMapLocation(coordinate);
   }
 
   function handleStartConstructionReport() {
@@ -404,7 +539,7 @@ export default function MapScreen() {
       <CampusMapView
         ref={mapRef}
         campus={campus}
-        places={filteredPlaces}
+        places={mapMarkerPlaces}
         constructionZones={constructionZones}
         pendingProposals={pendingProposals}
         showConstruction={filters.showConstruction}
@@ -417,6 +552,7 @@ export default function MapScreen() {
         onSelectConstructionZone={handleSelectConstructionZone}
         onSelectProposal={handleSelectProposal}
         onMapPress={handleMapPress}
+        onSelectPoi={handleSelectPoi}
       />
 
       <SafeAreaView style={styles.topOverlay} edges={["top"]} pointerEvents="box-none">
@@ -431,6 +567,7 @@ export default function MapScreen() {
             <SearchResultsList
               results={filteredPlaces}
               externalResults={externalSearchResults}
+              possibleMatches={dedupedPossibleMatches}
               isSearchingExternal={isSearchingExternal}
               onSelect={handleSelectSearchResult}
             />
@@ -441,6 +578,12 @@ export default function MapScreen() {
       {isRouting && (
         <View style={styles.routingBanner} pointerEvents="none">
           <Text style={styles.routingBannerText}>Finding walking route…</Text>
+        </View>
+      )}
+
+      {isResolvingTap && (
+        <View style={styles.routingBanner} pointerEvents="none">
+          <Text style={styles.routingBannerText}>Looking up this location…</Text>
         </View>
       )}
 

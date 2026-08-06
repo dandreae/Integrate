@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -62,6 +62,14 @@ export function PlacePreviewCard({
 
   function close() {
     onClose();
+  }
+
+  function handleDirectionsPress() {
+    Alert.alert(`Directions to ${place.officialName}`, "Start from where?", [
+      { text: "My Location", onPress: () => onDirections(place) },
+      { text: "Choose starting point...", onPress: () => setOriginPickerVisible(true) },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   const panGesture = Gesture.Pan()
@@ -188,25 +196,15 @@ export function PlacePreviewCard({
             )}
           </ScrollView>
 
-          <View style={styles.directionsRow}>
-            <Pressable
-              onPress={() => onDirections(place)}
-              accessibilityRole="button"
-              accessibilityLabel={`Get directions to ${place.officialName}`}
-              style={styles.directionsButton}
-            >
-              <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
-              <Text style={styles.directionsLabel}>Directions</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setOriginPickerVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Get directions to ${place.officialName} from another place, without using your location`}
-              style={styles.fromAnotherPlaceButton}
-            >
-              <Ionicons name="swap-vertical-outline" size={20} color={colors.accent} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={handleDirectionsPress}
+            accessibilityRole="button"
+            accessibilityLabel={`Get directions to ${place.officialName}`}
+            style={styles.directionsButton}
+          >
+            <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
+            <Text style={styles.directionsLabel}>Directions</Text>
+          </Pressable>
         </SafeAreaView>
       </Animated.View>
 
@@ -340,28 +338,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.accent,
   },
-  directionsRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
   directionsButton: {
-    flex: 1,
     height: 48,
     borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 6,
+    marginTop: spacing.lg,
     backgroundColor: colors.accent,
-  },
-  fromAnotherPlaceButton: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentMuted,
   },
   directionsLabel: {
     ...typography.bodyStrong,

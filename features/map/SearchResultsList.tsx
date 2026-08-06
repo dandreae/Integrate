@@ -9,32 +9,48 @@ interface SearchResultsListProps {
   results: Place[];
   /** Places found via the map/geocoding service — not curated, shown separately and honestly labeled. */
   externalResults: Place[];
+  /** Algorithmic "this might be what that abbreviation means" guesses — always unconfirmed, never auto-selected. */
+  possibleMatches: Place[];
   isSearchingExternal: boolean;
   onSelect: (place: Place) => void;
 }
 
 const MAX_RESULTS = 6;
 
-function ResultRow({ place, onSelect }: { place: Place; onSelect: (place: Place) => void }) {
+function ResultRow({
+  place,
+  onSelect,
+  isGuess,
+}: {
+  place: Place;
+  onSelect: (place: Place) => void;
+  isGuess?: boolean;
+}) {
   const meta = PLACE_CATEGORY_META[place.category];
   return (
     <Pressable
       onPress={() => onSelect(place)}
       accessibilityRole="button"
-      accessibilityLabel={place.officialName}
+      accessibilityLabel={isGuess ? `${place.officialName}, unconfirmed guess` : place.officialName}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       <View style={[styles.rowIcon, { backgroundColor: meta.color }]}>
-        <Ionicons name={meta.icon} size={16} color={colors.textInverse} />
+        <Ionicons name={isGuess ? "help" : meta.icon} size={16} color={colors.textInverse} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowName} numberOfLines={1}>
           {place.officialName}
         </Text>
-        {place.localName && (
-          <Text style={styles.rowSubtext} numberOfLines={1}>
-            {place.localName}
+        {isGuess ? (
+          <Text style={styles.rowGuessSubtext} numberOfLines={1}>
+            Possible match — not confirmed
           </Text>
+        ) : (
+          place.localName && (
+            <Text style={styles.rowSubtext} numberOfLines={1}>
+              {place.localName}
+            </Text>
+          )
         )}
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
@@ -45,10 +61,11 @@ function ResultRow({ place, onSelect }: { place: Place; onSelect: (place: Place)
 export function SearchResultsList({
   results,
   externalResults,
+  possibleMatches,
   isSearchingExternal,
   onSelect,
 }: SearchResultsListProps) {
-  const hasAny = results.length > 0 || externalResults.length > 0;
+  const hasAny = results.length > 0 || externalResults.length > 0 || possibleMatches.length > 0;
 
   if (!hasAny && !isSearchingExternal) {
     return (
@@ -72,6 +89,17 @@ export function SearchResultsList({
           </View>
           {externalResults.slice(0, MAX_RESULTS).map((place) => (
             <ResultRow key={place.id} place={place} onSelect={onSelect} />
+          ))}
+        </>
+      )}
+
+      {possibleMatches.length > 0 && (
+        <>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeaderText}>Possibly what you mean</Text>
+          </View>
+          {possibleMatches.slice(0, MAX_RESULTS).map((place) => (
+            <ResultRow key={place.id} place={place} onSelect={onSelect} isGuess />
           ))}
         </>
       )}
@@ -114,6 +142,10 @@ const styles = StyleSheet.create({
   rowSubtext: {
     ...typography.caption,
     color: colors.textSecondary,
+  },
+  rowGuessSubtext: {
+    ...typography.caption,
+    color: colors.warning,
   },
   sectionHeaderRow: {
     flexDirection: "row",

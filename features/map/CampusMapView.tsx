@@ -1,12 +1,17 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
-import MapView, { Marker, Polyline, type MapPressEvent, type Region } from "react-native-maps";
+import MapView, { Marker, Polyline, type MapPressEvent, type PoiClickEvent, type Region } from "react-native-maps";
 import type { Campus, ConstructionZone, LatLng, Place, Proposal, Route } from "@/types";
 import { colors, radii, shadow } from "@/constants/theme";
 import { PlaceMarker } from "./PlaceMarker";
 import { ConstructionZoneOverlay } from "./ConstructionZoneOverlay";
 import { AccessibleEntranceMarker } from "./AccessibleEntranceMarker";
 import { PendingProposalOverlay } from "@/features/edits/PendingProposalOverlay";
+
+export interface MapPoiSelection {
+  name: string;
+  coordinate: LatLng;
+}
 
 interface CampusMapViewProps {
   campus: Campus;
@@ -25,6 +30,13 @@ interface CampusMapViewProps {
   onSelectConstructionZone: (zone: ConstructionZone) => void;
   onSelectProposal: (proposal: Proposal) => void;
   onMapPress: (coordinate: LatLng) => void;
+  /**
+   * Tapping a titled point of interest baked into the map tiles themselves
+   * (e.g. "Copley Hall", "Boarman Family Cemetery") — the name comes
+   * straight from the map SDK, not a guess. iOS only fires this with the
+   * Google Maps provider; Apple Maps doesn't expose POI taps at all here.
+   */
+  onSelectPoi?: (poi: MapPoiSelection) => void;
 }
 
 interface MapSize {
@@ -131,6 +143,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     onSelectConstructionZone,
     onSelectProposal,
     onMapPress,
+    onSelectPoi,
   },
   ref
 ) {
@@ -155,6 +168,10 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     onMapPress(event.nativeEvent.coordinate);
   }
 
+  function handlePoiClick(event: PoiClickEvent) {
+    onSelectPoi?.({ name: event.nativeEvent.name, coordinate: event.nativeEvent.coordinate });
+  }
+
   return (
     <View style={styles.container} onLayout={handleLayout}>
       <MapView
@@ -165,6 +182,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
         showsMyLocationButton={false}
         showsCompass={false}
         onPress={handlePress}
+        onPoiClick={handlePoiClick}
         onRegionChangeComplete={setRegion}
         accessibilityLabel={`Map of ${campus.name}`}
       >

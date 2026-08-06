@@ -17,4 +17,10 @@ export interface GeocodingProvider {
    * complement to curated place data, not a required path.
    */
   search(query: string, near: LatLng): Promise<GeocodeResult[]>;
+  /**
+   * Resolves a tapped map coordinate to the nearest named feature (e.g. a
+   * building), so users can select any real building — not just curated
+   * ones — directly from the map. Returns null on no match or failure.
+   */
+  reverse(point: LatLng): Promise<GeocodeResult | null>;
 }

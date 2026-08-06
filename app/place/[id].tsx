@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -67,6 +67,15 @@ export default function PlaceDetailScreen() {
     if (!place) return;
     requestDirections(place.id);
     router.back();
+  }
+
+  function handleDirectionsPress() {
+    if (!place) return;
+    Alert.alert(`Directions to ${place.officialName}`, "Start from where?", [
+      { text: "My Location", onPress: handleDirections },
+      { text: "Choose starting point...", onPress: () => setOriginPickerVisible(true) },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   function handleDirectionsFrom(origin: Place) {
@@ -219,25 +228,15 @@ export default function PlaceDetailScreen() {
       </ScrollView>
 
       <SafeAreaView edges={["bottom"]} style={styles.footer}>
-        <View style={styles.directionsRow}>
-          <Pressable
-            onPress={handleDirections}
-            accessibilityRole="button"
-            accessibilityLabel={`Get directions to ${place.officialName}`}
-            style={styles.directionsButton}
-          >
-            <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
-            <Text style={styles.directionsLabel}>Directions</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setOriginPickerVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Get directions to ${place.officialName} from another place, without using your location`}
-            style={styles.fromAnotherPlaceButton}
-          >
-            <Ionicons name="swap-vertical-outline" size={20} color={colors.accent} />
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={handleDirectionsPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Get directions to ${place.officialName}`}
+          style={styles.directionsButton}
+        >
+          <Ionicons name="navigate-outline" size={18} color={colors.textInverse} />
+          <Text style={styles.directionsLabel}>Directions</Text>
+        </Pressable>
       </SafeAreaView>
 
       <PlacePickerSheet
@@ -374,12 +373,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  directionsRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
   directionsButton: {
-    flex: 1,
     height: 52,
     borderRadius: radii.md,
     alignItems: "center",
@@ -388,14 +382,6 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.accent,
     ...shadow.card,
-  },
-  fromAnotherPlaceButton: {
-    width: 52,
-    height: 52,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentMuted,
   },
   directionsLabel: {
     ...typography.bodyStrong,

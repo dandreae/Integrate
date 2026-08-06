@@ -1,4 +1,4 @@
-import type { Place } from "@/types";
+import type { LatLng, Place } from "@/types";
 import type { GeocodeResult } from "./GeocodingProvider";
 
 /**
@@ -25,4 +25,13 @@ export function toSyntheticPlace(result: GeocodeResult, campusId: string): Place
     openingHours: { summary: "Hours not available" },
     isSaved: false,
   };
+}
+
+/**
+ * Fallback for a long-press on the map where no named building could be
+ * resolved nearby — still lets the user get directions to that exact
+ * point rather than dead-ending the interaction.
+ */
+export function toDroppedPinPlace(point: LatLng, campusId: string): Place {
+  return toSyntheticPlace({ name: "Dropped pin", latitude: point.latitude, longitude: point.longitude }, campusId);
 }
