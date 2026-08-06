@@ -107,5 +107,17 @@ export const ROUTING_CONFIG = {
 
     /** A construction zone within this distance of the route path is considered "near" it. */
     constructionBufferMeters: 25,
+
+    /**
+     * Added per active accessibility report (elevator out, ramp blocked,
+     * etc.) matching the destination — scoped to the specific entrance if
+     * the report names one, otherwise applied place-wide. Community-reported,
+     * not verified, so this is a strong steer away rather than a rejection.
+     */
+    accessibilityReportPenaltySeconds: {
+      fastest: 0,
+      accessible: 600,
+      mostAccessible: 1800,
+    } satisfies Record<RoutePreference, number>,
   },
 } as const;

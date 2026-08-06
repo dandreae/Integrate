@@ -1,9 +1,11 @@
 import type {
   AccessibilityConfidence,
+  AccessibilityReport,
   ConstructionZone,
   RoutePreference,
   RouteWarning,
 } from "@/types";
+import { ACCESSIBILITY_ISSUE_META } from "@/types";
 import { ROUTING_CONFIG } from "@/constants/routing";
 import { distanceToSegmentMeters } from "@/features/routing/geo";
 import type { ProviderRouteCandidate } from "./RoutingProvider";
@@ -14,6 +16,10 @@ export interface ScoreInput {
   entranceCandidate: EntranceCandidate;
   preference: RoutePreference;
   constructionZones: ConstructionZone[];
+  /** All reports; filtered internally to active ones matching this destination/entrance. */
+  accessibilityReports?: AccessibilityReport[];
+  /** The destination place's id, if known — reports are matched against this, not the entrance alone, since most entrance data is still empty. */
+  destinationPlaceId?: string;
 }
 
 export interface ScoreResult {
@@ -26,6 +32,7 @@ export interface ScoreResult {
   verifiedAccessibleEntrance: boolean;
   hasStairs: boolean;
   nearbyConstructionZones: ConstructionZone[];
+  matchedAccessibilityReports: AccessibilityReport[];
 }
 
 function pathNearZone(
@@ -54,6 +61,8 @@ export function scoreCandidate({
   entranceCandidate,
   preference,
   constructionZones,
+  accessibilityReports = [],
+  destinationPlaceId,
 }: ScoreInput): ScoreResult {
   const s = ROUTING_CONFIG.scoring;
   const warnings: RouteWarning[] = [];
@@ -61,6 +70,14 @@ export function scoreCandidate({
   const nearbyConstructionZones = constructionZones.filter((zone) =>
     pathNearZone(candidate.coordinates, zone, s.constructionBufferMeters)
   );
+
+  const matchedAccessibilityReports = accessibilityReports.filter((report) => {
+    if (report.status !== "active") return false;
+    if (!destinationPlaceId || report.placeId !== destinationPlaceId) return false;
+    // A report scoped to one entrance shouldn't penalize routes using a different entrance of the same place.
+    if (report.entranceId && entranceCandidate.entrance?.id !== report.entranceId) return false;
+    return true;
+  });
 
   const confirmedClosure = nearbyConstructionZones.find((zone) => zone.status === "confirmed-closure");
   if (confirmedClosure) {
@@ -80,6 +97,7 @@ export function scoreCandidate({
       usedAccessibleEntrance: false,
       verifiedAccessibleEntrance: false,
       hasStairs: candidate.hasDetectedSteps,
+      matchedAccessibilityReports,
       nearbyConstructionZones,
     };
   }
@@ -155,10 +173,22 @@ export function scoreCandidate({
     });
   }
 
+  // Community-reported accessibility issues (elevator out, ramp blocked, etc.)
+  for (const report of matchedAccessibilityReports) {
+    score += s.accessibilityReportPenaltySeconds[preference];
+    warnings.push({
+      type: "accessibility-report",
+      label: `Reported: ${ACCESSIBILITY_ISSUE_META[report.issueType].label}`,
+      severity: "high",
+      description: report.description,
+    });
+  }
+
   return {
     score,
     rejected: false,
     warnings,
+    matchedAccessibilityReports,
     accessibilityConfidence,
     usedAccessibleEntrance,
     verifiedAccessibleEntrance,

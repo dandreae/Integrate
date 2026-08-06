@@ -71,5 +71,37 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // Accessibility reports are visible immediately on submission (unlike
+    // proposals/construction zones, which wait on confirmation votes) — a
+    // broken elevator matters now, not once a threshold is crossed.
+    match /accessibilityReports/{reportId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.confirmCount == 0;
+
+      // Either a "still an issue" confirmCount bump (handled transactionally
+      // alongside a confirmations/{uid} doc, same idempotency trick as
+      // proposals above) or marking it resolved — never both at once.
+      allow update: if signedIn()
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmCount'])
+            && request.resource.data.confirmCount == resource.data.confirmCount + 1)
+          ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt'])
+            && request.resource.data.status == 'resolved')
+        );
+
+      allow delete: if false;
+
+      match /confirmations/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow update, delete: if false;
+      }
+    }
   }
 }

@@ -1,4 +1,13 @@
-import type { ConstructionZone, LatLng, Route, RouteOption, RoutePreference, RouteRequest } from "@/types";
+import type {
+  AccessibilityReport,
+  ConstructionZone,
+  LatLng,
+  Route,
+  RouteOption,
+  RoutePreference,
+  RouteRequest,
+} from "@/types";
+import { ACCESSIBILITY_ISSUE_META } from "@/types";
 import { ROUTING_CONFIG } from "@/constants/routing";
 import { haversineDistanceMeters } from "@/features/routing/geo";
 import {
@@ -84,13 +93,22 @@ function pickBest(
   preference: RoutePreference,
   entranceCandidates: EntranceCandidate[],
   candidatesByEntrance: Map<EntranceCandidate, ProviderRouteCandidate[]>,
-  constructionZones: ConstructionZone[]
+  constructionZones: ConstructionZone[],
+  accessibilityReports: AccessibilityReport[],
+  destinationPlaceId: string | undefined
 ): Winner | null {
   let best: Winner | null = null;
   for (const entranceCandidate of entranceCandidates) {
     const candidates = candidatesByEntrance.get(entranceCandidate) ?? [];
     for (const candidate of candidates) {
-      const result = scoreCandidate({ candidate, entranceCandidate, preference, constructionZones });
+      const result = scoreCandidate({
+        candidate,
+        entranceCandidate,
+        preference,
+        constructionZones,
+        accessibilityReports,
+        destinationPlaceId,
+      });
       if (result.rejected) continue;
       if (!best || result.score < best.result.score) {
         best = { candidate, entranceCandidate, result };
@@ -138,6 +156,15 @@ function buildReasons(preference: RoutePreference, winner: Winner, fastestWinner
     reasons.push("Accessible entrance could not be verified");
   }
 
+  if (winner.result.matchedAccessibilityReports.length > 0) {
+    reasons.push(`Reported issue: ${ACCESSIBILITY_ISSUE_META[winner.result.matchedAccessibilityReports[0].issueType].label}`);
+  } else if (
+    preference !== "fastest" &&
+    (fastestWinner?.result.matchedAccessibilityReports.length ?? 0) > 0
+  ) {
+    reasons.push("Avoids reported accessibility issue");
+  }
+
   return reasons;
 }
 
@@ -180,11 +207,17 @@ export class RealRouteRepository implements RouteRepository {
 
   async getRouteOptions(request: RouteRequest): Promise<RouteOption[]> {
     const constructionZones = request.constructionZones ?? [];
-    const cacheKey = buildRouteCacheKey(request.origin, request.destination, constructionZones);
+    const accessibilityReports = request.accessibilityReports ?? [];
+    const cacheKey = buildRouteCacheKey(
+      request.origin,
+      request.destination,
+      constructionZones,
+      accessibilityReports
+    );
     const cached = getCachedRouteOptions(cacheKey);
     if (cached) return cached;
 
-    const options = await this.computeRouteOptions(request, constructionZones);
+    const options = await this.computeRouteOptions(request, constructionZones, accessibilityReports);
     setCachedRouteOptions(cacheKey, options);
     return options;
   }
@@ -209,7 +242,8 @@ export class RealRouteRepository implements RouteRepository {
 
   private async computeRouteOptions(
     request: RouteRequest,
-    constructionZones: ConstructionZone[]
+    constructionZones: ConstructionZone[],
+    accessibilityReports: AccessibilityReport[]
   ): Promise<RouteOption[]> {
     const straightLineMeters = haversineDistanceMeters(request.origin, request.destination);
     if (straightLineMeters > ROUTING_CONFIG.coverage.maxStraightLineMeters) {
@@ -269,7 +303,14 @@ export class RealRouteRepository implements RouteRepository {
     for (const preference of PREFERENCES) {
       winners.set(
         preference,
-        pickBest(preference, entranceCandidatesByPreference[preference], candidatesByEntrance, constructionZones)
+        pickBest(
+          preference,
+          entranceCandidatesByPreference[preference],
+          candidatesByEntrance,
+          constructionZones,
+          accessibilityReports,
+          request.destinationPlace?.id
+        )
       );
     }
     const fastestWinner = winners.get("fastest") ?? null;

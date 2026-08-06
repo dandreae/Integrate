@@ -10,13 +10,15 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { Place } from "@/types";
+import type { AccessibilityIssueType, AccessibilityReport, Place } from "@/types";
+import { ACCESSIBILITY_ISSUE_META } from "@/types";
 import { Badge } from "@/components/Badge";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 import { getAccessibilitySummary } from "./accessibilitySummary";
 import { PlacePickerSheet } from "./PlacePickerSheet";
+import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { formatDistanceMeters } from "@/features/routing/geo";
 
 const DISMISS_THRESHOLD = 90;
@@ -26,22 +28,30 @@ interface PlacePreviewCardProps {
   place: Place;
   places: Place[];
   distanceMeters: number | null;
+  accessibilityReports: AccessibilityReport[];
   onClose: () => void;
   onOpenDetail: (place: Place) => void;
   onDirections: (place: Place) => void;
   onDirectionsFrom: (origin: Place, destination: Place) => void;
+  onSubmitAccessibilityReport: (
+    place: Place,
+    payload: { issueType: AccessibilityIssueType; description: string }
+  ) => Promise<void>;
 }
 
 export function PlacePreviewCard({
   place,
   places,
   distanceMeters,
+  accessibilityReports,
   onClose,
   onOpenDetail,
   onDirections,
   onDirectionsFrom,
+  onSubmitAccessibilityReport,
 }: PlacePreviewCardProps) {
   const [originPickerVisible, setOriginPickerVisible] = useState(false);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
   // Places found via the map/geocoding service (see services/geocoding) rather than
   // curated in data/places.ts — there's no full detail page for these to open.
   const isCurated = !place.id.startsWith("osm:");
@@ -50,9 +60,12 @@ export function PlacePreviewCard({
   const meta = PLACE_CATEGORY_META[place.category];
   const accessibilitySummary = getAccessibilitySummary(place);
   const hasAccessibleEntrance = place.entrances.some((entrance) => entrance.isAccessible);
+  const activeReports = accessibilityReports.filter(
+    (report) => report.placeId === place.id && report.status === "active"
+  );
 
   const { height: windowHeight } = useWindowDimensions();
-  const panelHeight = windowHeight / 3;
+  const panelHeight = windowHeight * 0.46;
 
   const translateY = useSharedValue(0);
 
@@ -183,6 +196,25 @@ export function PlacePreviewCard({
               </Text>
             </View>
 
+            {activeReports.map((report) => (
+              <View key={report.id} style={styles.reportBanner}>
+                <Ionicons name={ACCESSIBILITY_ISSUE_META[report.issueType].icon} size={16} color={colors.danger} />
+                <Text style={styles.reportBannerText}>
+                  {ACCESSIBILITY_ISSUE_META[report.issueType].label}: {report.description}
+                </Text>
+              </View>
+            ))}
+
+            <Pressable
+              onPress={() => setReportSheetVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Report an accessibility issue at ${place.officialName}`}
+              style={styles.reportButton}
+            >
+              <Ionicons name="flag-outline" size={16} color={colors.warning} />
+              <Text style={styles.reportButtonLabel}>Report an accessibility issue</Text>
+            </Pressable>
+
             {place.websiteUrl && (
               <Pressable
                 onPress={() => Linking.openURL(place.websiteUrl!)}
@@ -217,6 +249,16 @@ export function PlacePreviewCard({
         onSelect={(origin) => {
           setOriginPickerVisible(false);
           onDirectionsFrom(origin, place);
+        }}
+      />
+
+      <ReportAccessibilityIssueSheet
+        visible={reportSheetVisible}
+        placeName={place.officialName}
+        onCancel={() => setReportSheetVisible(false)}
+        onSubmit={async (payload) => {
+          await onSubmitAccessibilityReport(place, payload);
+          setReportSheetVisible(false);
         }}
       />
     </Animated.View>
@@ -320,6 +362,39 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
+  reportBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    backgroundColor: colors.dangerMuted,
+  },
+  reportBannerText: {
+    ...typography.caption,
+    color: colors.danger,
+    flex: 1,
+  },
+  reportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.warningMuted,
+    minHeight: touchTarget.minimum,
+  },
+  reportButtonLabel: {
+    ...typography.caption,
+    fontWeight: "600",
+    color: colors.warning,
+  },
   websiteButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -345,7 +420,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 6,
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
     backgroundColor: colors.accent,
   },
   directionsLabel: {

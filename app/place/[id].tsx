@@ -3,19 +3,23 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import type { LatLng, Place } from "@/types";
+import type { AccessibilityIssueType, LatLng, Place } from "@/types";
+import { ACCESSIBILITY_ISSUE_META } from "@/types";
 import { Badge } from "@/components/Badge";
 import { ACCESSIBILITY_FEATURE_META, PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
+import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { getAccessibilitySummary } from "@/features/places/accessibilitySummary";
 import { PlacePickerSheet } from "@/features/places/PlacePickerSheet";
 import { formatDistanceMeters, haversineDistanceMeters } from "@/features/routing/geo";
+import { useAccessibilityReports } from "@/hooks/useAccessibilityReports";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
-import { placeRepository } from "@/services/repositories";
+import { accessibilityReportRepository, placeRepository } from "@/services/repositories";
 import { applyPlaceOverride } from "@/services/repositories/firestore/placeOverridesRepository";
 import { useDirectionsStore } from "@/store/useDirectionsStore";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
+import { useUserStore } from "@/store/useUserStore";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -26,7 +30,10 @@ export default function PlaceDetailScreen() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [campusPlaces, setCampusPlaces] = useState<Place[]>([]);
   const [originPickerVisible, setOriginPickerVisible] = useState(false);
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const placeOverrides = usePlaceOverrides();
+  const accessibilityReports = useAccessibilityReports();
+  const uid = useUserStore((state) => state.uid);
 
   const place = useMemo(
     () => (rawPlace ? applyPlaceOverride(rawPlace, placeOverrides.get(rawPlace.id)) : null),
@@ -85,6 +92,22 @@ export default function PlaceDetailScreen() {
     router.back();
   }
 
+  async function handleSubmitAccessibilityReport(details: {
+    issueType: AccessibilityIssueType;
+    description: string;
+  }) {
+    if (!place) return;
+    if (!uid) {
+      Alert.alert("Not ready yet", "Still setting up your account — try again in a moment.");
+      return;
+    }
+    await accessibilityReportRepository.submitReport(uid, {
+      placeId: place.id,
+      issueType: details.issueType,
+      description: details.description,
+    });
+  }
+
   if (notFound) {
     return (
       <View style={styles.container}>
@@ -110,6 +133,9 @@ export default function PlaceDetailScreen() {
 
   const meta = PLACE_CATEGORY_META[place.category];
   const accessibilitySummary = getAccessibilitySummary(place);
+  const activeReports = accessibilityReports.filter(
+    (report) => report.placeId === place.id && report.status === "active"
+  );
 
   return (
     <View style={styles.container}>
@@ -194,6 +220,25 @@ export default function PlaceDetailScreen() {
               })}
             </View>
           )}
+
+          {activeReports.map((report) => (
+            <View key={report.id} style={styles.reportBanner}>
+              <Ionicons name={ACCESSIBILITY_ISSUE_META[report.issueType].icon} size={16} color={colors.danger} />
+              <Text style={styles.reportBannerText}>
+                {ACCESSIBILITY_ISSUE_META[report.issueType].label}: {report.description}
+              </Text>
+            </View>
+          ))}
+
+          <Pressable
+            onPress={() => setReportSheetVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Report an accessibility issue at ${place.officialName}`}
+            style={styles.reportButton}
+          >
+            <Ionicons name="flag-outline" size={16} color={colors.warning} />
+            <Text style={styles.reportButtonLabel}>Report an accessibility issue</Text>
+          </Pressable>
         </Section>
 
         {place.entrances.length > 0 && (
@@ -246,6 +291,16 @@ export default function PlaceDetailScreen() {
         excludePlaceId={place.id}
         onClose={() => setOriginPickerVisible(false)}
         onSelect={handleDirectionsFrom}
+      />
+
+      <ReportAccessibilityIssueSheet
+        visible={reportSheetVisible}
+        placeName={place.officialName}
+        onCancel={() => setReportSheetVisible(false)}
+        onSubmit={async (payload) => {
+          await handleSubmitAccessibilityReport(payload);
+          setReportSheetVisible(false);
+        }}
       />
     </View>
   );
@@ -338,6 +393,39 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  reportBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    backgroundColor: colors.dangerMuted,
+  },
+  reportBannerText: {
+    ...typography.caption,
+    color: colors.danger,
+    flex: 1,
+  },
+  reportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.warningMuted,
+    minHeight: 44,
+  },
+  reportButtonLabel: {
+    ...typography.caption,
+    fontWeight: "600",
+    color: colors.warning,
   },
   entranceRow: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import type { ConstructionZone, LatLng, RouteOption } from "@/types";
+import type { AccessibilityReport, ConstructionZone, LatLng, RouteOption } from "@/types";
 
 /** Lightweight in-memory session cache. No persistence, no TTL. */
 const cache = new Map<string, RouteOption[]>();
@@ -11,10 +11,15 @@ function roundCoord(value: number): number {
 export function buildRouteCacheKey(
   origin: LatLng,
   destination: LatLng,
-  constructionZones: ConstructionZone[]
+  constructionZones: ConstructionZone[],
+  accessibilityReports: AccessibilityReport[] = []
 ): string {
   const zoneFingerprint = constructionZones
     .map((z) => `${z.id}:${z.status ?? "reported"}`)
+    .sort()
+    .join(",");
+  const reportFingerprint = accessibilityReports
+    .map((r) => `${r.id}:${r.status}:${r.confirmCount}`)
     .sort()
     .join(",");
   return [
@@ -23,6 +28,7 @@ export function buildRouteCacheKey(
     roundCoord(destination.latitude),
     roundCoord(destination.longitude),
     zoneFingerprint,
+    reportFingerprint,
   ].join("|");
 }
 

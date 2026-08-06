@@ -1,3 +1,4 @@
+import type { AccessibilityReport } from "./accessibilityReport";
 import type { ConstructionZone, LatLng } from "./construction";
 import type { Place } from "./place";
 
@@ -10,7 +11,8 @@ export type RouteWarningType =
   | "elevator-dependent"
   | "narrow-path"
   | "entrance-closed"
-  | "accessibility-unverified";
+  | "accessibility-unverified"
+  | "accessibility-report";
 
 export type RouteWarningSeverity = "info" | "caution" | "high";
 
@@ -38,6 +40,8 @@ export interface RouteRequest {
   originPlace?: Place;
   /** Currently relevant construction zones (approved + seed), used for penalty/rejection scoring. */
   constructionZones?: ConstructionZone[];
+  /** Active/resolved accessibility reports (elevator outages, blocked ramps, etc.), used for penalty/rejection scoring. */
+  accessibilityReports?: AccessibilityReport[];
 }
 
 export interface Route {

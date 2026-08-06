@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Keyboard, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type MapView from "react-native-maps";
 import { router } from "expo-router";
 import type {
+  AccessibilityIssueType,
   Campus,
   ConstructionSeverity,
   ConstructionZone,
@@ -25,7 +26,7 @@ import { ConstructionZoneFormSheet } from "@/features/edits/ConstructionZoneForm
 import { IconButton } from "@/components/IconButton";
 import { MAP_FILTER_CATEGORIES } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
-import { campusRepository, placeRepository, routeRepository } from "@/services/repositories";
+import { accessibilityReportRepository, campusRepository, placeRepository, routeRepository } from "@/services/repositories";
 import {
   expandNicknameAlias,
   fetchNearbyNamedFeatures,
@@ -48,6 +49,7 @@ import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
 import { useApprovedConstructionZones } from "@/hooks/useApprovedConstructionZones";
 import { usePendingProposals } from "@/hooks/usePendingProposals";
+import { useAccessibilityReports } from "@/hooks/useAccessibilityReports";
 
 const DEFAULT_FILTERS: MapFilterState = {
   categories: new Set(MAP_FILTER_CATEGORIES),
@@ -104,6 +106,7 @@ export default function MapScreen() {
   const placeOverrides = usePlaceOverrides();
   const pendingProposals = usePendingProposals();
   const constructionZones = useApprovedConstructionZones(selectedCampusId, seedConstructionZones);
+  const accessibilityReports = useAccessibilityReports();
 
   useEffect(() => {
     campusRepository.getCampusById(selectedCampusId).then((result) => setCampus(result ?? null));
@@ -257,6 +260,7 @@ export default function MapScreen() {
     filters.showAccessibleEntrances;
 
   function handleSelectPlace(place: Place) {
+    Keyboard.dismiss();
     lastOverlayPressRef.current = Date.now();
     setRouteOptions(null);
     setRouteDestination(null);
@@ -343,6 +347,7 @@ export default function MapScreen() {
           destinationPlace: destination,
           originPlace,
           constructionZones,
+          accessibilityReports,
         });
         setRouteOptions(options);
 
@@ -362,7 +367,7 @@ export default function MapScreen() {
         setIsRouting(false);
       }
     },
-    [prefersAccessibleRouting, constructionZones]
+    [prefersAccessibleRouting, constructionZones, accessibilityReports]
   );
 
   const handleDirections = useCallback(
@@ -422,6 +427,7 @@ export default function MapScreen() {
   }
 
   function handleMapPress(coordinate: LatLng) {
+    Keyboard.dismiss();
     if (isDroppingPoints) {
       setDraftCoordinates((previous) => [...previous, coordinate]);
       return;
@@ -503,6 +509,21 @@ export default function MapScreen() {
     });
     setDraftCoordinates([]);
     setConstructionFormVisible(false);
+  }
+
+  async function handleSubmitAccessibilityReport(
+    place: Place,
+    details: { issueType: AccessibilityIssueType; description: string }
+  ) {
+    if (!uid) {
+      Alert.alert("Not ready yet", "Still setting up your account — try again in a moment.");
+      return;
+    }
+    await accessibilityReportRepository.submitReport(uid, {
+      placeId: place.id,
+      issueType: details.issueType,
+      description: details.description,
+    });
   }
 
   // Directions requested from the full place detail screen: it signals the
@@ -636,10 +657,12 @@ export default function MapScreen() {
           place={selectedPlace}
           places={overriddenPlaces}
           distanceMeters={selectedPlaceDistanceMeters}
+          accessibilityReports={accessibilityReports}
           onClose={() => setSelectedPlace(null)}
           onOpenDetail={handleOpenDetail}
           onDirections={handleDirections}
           onDirectionsFrom={handleDirectionsBetween}
+          onSubmitAccessibilityReport={handleSubmitAccessibilityReport}
         />
       )}
 

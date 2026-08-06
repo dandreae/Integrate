@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConstructionZone, Entrance, LatLng } from "@/types";
+import type { AccessibilityReport, ConstructionZone, Entrance, LatLng } from "@/types";
 import type { ProviderRouteCandidate } from "../RoutingProvider";
 import type { EntranceCandidate } from "../entranceSelection";
 import { scoreCandidate } from "../RouteCandidateScorer";
@@ -29,6 +29,19 @@ function accessibleEntrance(overrides: Partial<Entrance> = {}): Entrance {
     longitude: DEST.longitude,
     label: "Ramp entrance",
     isAccessible: true,
+    ...overrides,
+  };
+}
+
+function report(overrides: Partial<AccessibilityReport> = {}): AccessibilityReport {
+  return {
+    id: "r1",
+    placeId: "dest-place",
+    issueType: "elevator-out",
+    description: "Elevator is out of service.",
+    reportedAt: "2026-01-01T00:00:00.000Z",
+    status: "active",
+    confirmCount: 2,
     ...overrides,
   };
 }
@@ -173,5 +186,85 @@ describe("scoreCandidate", () => {
       constructionZones: [zone({ affectedAccessibility: true })],
     });
     expect(accessibilityImpacting.score).toBeGreaterThan(generic.score);
+  });
+
+  it("penalizes a route to a destination with an active matching accessibility report", () => {
+    const clear = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [],
+      destinationPlaceId: "dest-place",
+    });
+    const reported = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [report()],
+      destinationPlaceId: "dest-place",
+    });
+    expect(reported.score).toBeGreaterThan(clear.score);
+    expect(reported.matchedAccessibilityReports).toHaveLength(1);
+    expect(reported.warnings.some((w) => w.type === "accessibility-report")).toBe(true);
+  });
+
+  it("ignores a resolved report and a report for a different place", () => {
+    const resolved = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [report({ status: "resolved" })],
+      destinationPlaceId: "dest-place",
+    });
+    const wrongPlace = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [report({ placeId: "some-other-place" })],
+      destinationPlaceId: "dest-place",
+    });
+    expect(resolved.matchedAccessibilityReports).toHaveLength(0);
+    expect(wrongPlace.matchedAccessibilityReports).toHaveLength(0);
+  });
+
+  it("only applies an entrance-scoped report to routes using that specific entrance", () => {
+    const otherEntrance = accessibleEntrance({ id: "e2", label: "Other entrance" });
+    const scopedReport = report({ entranceId: "e1" });
+
+    const usingReportedEntrance = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate({ entrance: accessibleEntrance(), isKnownEntrance: true }),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [scopedReport],
+      destinationPlaceId: "dest-place",
+    });
+    const usingDifferentEntrance = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate({ entrance: otherEntrance, isKnownEntrance: true }),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [scopedReport],
+      destinationPlaceId: "dest-place",
+    });
+
+    expect(usingReportedEntrance.matchedAccessibilityReports).toHaveLength(1);
+    expect(usingDifferentEntrance.matchedAccessibilityReports).toHaveLength(0);
+  });
+
+  it("fastest ignores accessibility reports (zero weight, matches design for the other accessibility penalties)", () => {
+    const result = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "fastest",
+      constructionZones: [],
+      accessibilityReports: [report()],
+      destinationPlaceId: "dest-place",
+    });
+    expect(result.score).toBe(200);
   });
 });
