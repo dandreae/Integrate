@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { CampusEvent, MockCampusUser, Place } from "@/types";
-import { EVENT_CATEGORY_META } from "@/constants/categories";
+import { EVENT_CATEGORY_META, FRIEND_STATUS_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { formatRelativeEventDate } from "@/features/events/eventDate";
 
@@ -32,7 +32,21 @@ export function UserProfileSheet({ user, events, places, onClose, onSelectEvent 
             <View style={[styles.avatar, { backgroundColor: user.avatarColor }]}>
               <Text style={styles.avatarInitials}>{user.avatarInitials}</Text>
             </View>
-            <Text style={styles.name}>{user.name}</Text>
+            <View>
+              <Text style={styles.name}>{user.name}</Text>
+              {user.status && (
+                <View style={styles.statusRow}>
+                  <Ionicons
+                    name={FRIEND_STATUS_META[user.status].icon}
+                    size={12}
+                    color={FRIEND_STATUS_META[user.status].color}
+                  />
+                  <Text style={[styles.statusText, { color: FRIEND_STATUS_META[user.status].color }]}>
+                    {FRIEND_STATUS_META[user.status].label}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
@@ -123,6 +137,16 @@ const styles = StyleSheet.create({
   name: {
     ...typography.h3,
     color: colors.textPrimary,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  statusText: {
+    ...typography.caption,
+    fontWeight: "600",
   },
   sectionLabel: {
     ...typography.caption,

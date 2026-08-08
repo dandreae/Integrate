@@ -1,5 +1,7 @@
 import type { LatLng } from "./construction";
 
+export type FriendStatus = "studying" | "in-class" | "chilling" | "free-to-hang" | "grabbing-food";
+
 /**
  * A synthetic campus "presence" — demo data only, never a real person's real
  * location. See data/mockUsers.ts for why this stays mock-only rather than
@@ -16,4 +18,6 @@ export interface MockCampusUser {
   currentLocation: LatLng;
   /** CampusEvent ids this user has saved / plans to attend. */
   savedEventIds: string[];
+  /** Absent means the friend hasn't set a status. */
+  status?: FriendStatus;
 }

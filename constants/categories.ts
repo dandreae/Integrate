@@ -1,7 +1,7 @@
 import type { ComponentProps } from "react";
 import type { Ionicons } from "@expo/vector-icons";
-import type { AccessibilityFeature, DiscoverPostType, EventCategory, PlaceCategory } from "@/types";
-import { categoryColors, discoverPostTypeColors, eventCategoryColors } from "./theme";
+import type { AccessibilityFeature, DiscoverPostType, EventCategory, FriendStatus, PlaceCategory } from "@/types";
+import { categoryColors, discoverPostTypeColors, eventCategoryColors, friendStatusColors } from "./theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -40,6 +40,18 @@ export const DISCOVER_POST_TYPE_META: Record<DiscoverPostType, CategoryMeta> = {
     label: "Student post",
     icon: "chatbubble-ellipses-outline",
     color: discoverPostTypeColors["student-post"],
+  },
+};
+
+export const FRIEND_STATUS_META: Record<FriendStatus, CategoryMeta> = {
+  studying: { label: "Studying", icon: "book-outline", color: friendStatusColors.studying },
+  "in-class": { label: "In class", icon: "school-outline", color: friendStatusColors["in-class"] },
+  chilling: { label: "Chilling", icon: "happy-outline", color: friendStatusColors.chilling },
+  "free-to-hang": { label: "Free to hang", icon: "people-outline", color: friendStatusColors["free-to-hang"] },
+  "grabbing-food": {
+    label: "Grabbing food",
+    icon: "restaurant-outline",
+    color: friendStatusColors["grabbing-food"],
   },
 };
 

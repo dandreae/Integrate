@@ -3,6 +3,7 @@ import { Alert, Keyboard, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type MapView from "react-native-maps";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import type {
   AccessibilityIssueType,
   Campus,
@@ -48,6 +49,7 @@ import {
 import { applyPlaceOverride } from "@/services/repositories/firestore/placeOverridesRepository";
 import { useAppStore } from "@/store/useAppStore";
 import { useDirectionsStore } from "@/store/useDirectionsStore";
+import { useFriendsStore } from "@/store/useFriendsStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
@@ -67,6 +69,7 @@ export default function MapScreen() {
   const selectedCampusId = useAppStore((state) => state.selectedCampusId);
   const prefersAccessibleRouting = useAppStore((state) => state.prefersAccessibleRouting);
   const uid = useUserStore((state) => state.uid);
+  const visibleToFriends = useFriendsStore((state) => state.visibleToFriends);
   const mapRef = useRef<MapView>(null);
   /** Timestamp of the last marker/overlay tap — see handleMapPress for why. */
   const lastOverlayPressRef = useRef(0);
@@ -653,6 +656,15 @@ export default function MapScreen() {
         </View>
       )}
 
+      {!visibleToFriends && !isDroppingPoints && (
+        <View style={styles.ghostBadgeWrapper} pointerEvents="none">
+          <View style={styles.ghostBadge}>
+            <Ionicons name="eye-off-outline" size={14} color={colors.textSecondary} />
+            <Text style={styles.ghostBadgeText}>Hidden from friends</Text>
+          </View>
+        </View>
+      )}
+
       {!isDroppingPoints && (
         <>
           <View style={styles.locateButtonWrapper} pointerEvents="box-none">
@@ -791,6 +803,25 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   routingBannerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  ghostBadgeWrapper: {
+    position: "absolute",
+    left: spacing.lg,
+    bottom: spacing.xl,
+  },
+  ghostBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...shadow.card,
+  },
+  ghostBadgeText: {
     ...typography.caption,
     color: colors.textSecondary,
   },

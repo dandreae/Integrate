@@ -18,6 +18,7 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#E0A72E",
     currentLocation: { latitude: 38.90884, longitude: -77.07267 },
     savedEventIds: ["farmers-market", "fall-kickoff-concert"],
+    status: "grabbing-food",
   },
   {
     id: "mock-marcus",
@@ -27,6 +28,7 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#3B5FE0",
     currentLocation: { latitude: 38.90738, longitude: -77.07182 },
     savedEventIds: ["homecoming-tailgate"],
+    status: "in-class",
   },
   {
     id: "mock-priya",
@@ -36,6 +38,7 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#7A5CE0",
     currentLocation: { latitude: 38.90664, longitude: -77.07249 },
     savedEventIds: [],
+    status: "studying",
   },
   {
     id: "mock-jordan",
@@ -45,6 +48,7 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#E0304F",
     currentLocation: { latitude: 38.90626, longitude: -77.07538 },
     savedEventIds: ["midnight-mug-open-mic"],
+    // No status set — exercises the "hasn't shared what they're up to" state.
   },
   {
     id: "mock-sam",
@@ -54,6 +58,7 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#4FAE32",
     currentLocation: { latitude: 38.91031, longitude: -77.07443 },
     savedEventIds: ["farmers-market"],
+    status: "free-to-hang",
   },
   {
     id: "mock-devon",
@@ -63,5 +68,6 @@ export const MOCK_CAMPUS_USERS: MockCampusUser[] = [
     avatarColor: "#C23F9C",
     currentLocation: { latitude: 38.91151, longitude: -77.07358 },
     savedEventIds: ["fall-kickoff-concert", "homecoming-tailgate"],
+    status: "chilling",
   },
 ];

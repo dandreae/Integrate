@@ -62,6 +62,14 @@ export const discoverPostTypeColors: Record<string, string> = {
   "student-post": "#E07C3B",
 };
 
+export const friendStatusColors: Record<string, string> = {
+  studying: "#7A5CE0",
+  "in-class": "#3B5FE0",
+  chilling: "#4A90A4",
+  "free-to-hang": "#4FAE32",
+  "grabbing-food": "#E07C3B",
+};
+
 export const spacing = {
   xs: 4,
   sm: 8,
