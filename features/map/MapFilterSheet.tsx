@@ -15,6 +15,7 @@ export interface MapFilterState {
   showConstruction: boolean;
   showAccessibleEntrances: boolean;
   showEvents: boolean;
+  showUsers: boolean;
 }
 
 interface MapFilterSheetProps {
@@ -41,6 +42,7 @@ export function MapFilterSheet({ visible, filters, onChange, onClose }: MapFilte
       showConstruction: true,
       showAccessibleEntrances: false,
       showEvents: true,
+      showUsers: true,
     });
   }
 
@@ -146,6 +148,22 @@ export function MapFilterSheet({ visible, filters, onChange, onClose }: MapFilte
                 color={filters.showEvents ? colors.textInverse : colors.textPrimary}
               />
               <Text style={[styles.chipLabel, filters.showEvents && styles.chipLabelActive]}>Events</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onChange({ ...filters, showUsers: !filters.showUsers })}
+              accessibilityRole="button"
+              accessibilityLabel="Show students nearby"
+              accessibilityState={{ selected: filters.showUsers }}
+              style={[styles.chip, filters.showUsers && { backgroundColor: colors.accent }]}
+            >
+              <Ionicons
+                name="people-outline"
+                size={16}
+                color={filters.showUsers ? colors.textInverse : colors.textPrimary}
+              />
+              <Text style={[styles.chipLabel, filters.showUsers && styles.chipLabelActive]}>
+                Students nearby
+              </Text>
             </Pressable>
           </View>
         </ScrollView>

@@ -10,6 +10,7 @@ import type {
   ConstructionSeverity,
   ConstructionZone,
   LatLng,
+  MockCampusUser,
   Place,
   Proposal,
   RouteOption,
@@ -19,6 +20,7 @@ import { CampusMapView, type MapPoiSelection } from "@/features/map/CampusMapVie
 import { MapSearchBar } from "@/features/map/MapSearchBar";
 import { MapFilterSheet, type MapFilterState } from "@/features/map/MapFilterSheet";
 import { SearchResultsList } from "@/features/map/SearchResultsList";
+import { UserProfileSheet } from "@/features/map/UserProfileSheet";
 import { PlacePreviewCard } from "@/features/places/PlacePreviewCard";
 import { RouteSummaryBar } from "@/features/routing/RouteSummaryBar";
 import { haversineDistanceMeters } from "@/features/routing/geo";
@@ -58,6 +60,7 @@ const DEFAULT_FILTERS: MapFilterState = {
   showConstruction: true,
   showAccessibleEntrances: false,
   showEvents: true,
+  showUsers: true,
 };
 
 export default function MapScreen() {
@@ -78,6 +81,8 @@ export default function MapScreen() {
   const [seedConstructionZones, setSeedConstructionZones] = useState<ConstructionZone[]>([]);
   const [events, setEvents] = useState<CampusEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<{ event: CampusEvent; place: Place } | null>(null);
+  const [mockUsers, setMockUsers] = useState<MockCampusUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<MockCampusUser | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -118,6 +123,7 @@ export default function MapScreen() {
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
     campusRepository.getConstructionZones(selectedCampusId).then(setSeedConstructionZones);
     campusRepository.getEvents(selectedCampusId).then(setEvents);
+    campusRepository.getMockUsers(selectedCampusId).then(setMockUsers);
   }, [selectedCampusId]);
 
   // Best-effort pool of every named building/amenity on campus, used only to
@@ -337,6 +343,20 @@ export default function MapScreen() {
   function handleSelectEvent(event: CampusEvent, place: Place) {
     lastOverlayPressRef.current = Date.now();
     Keyboard.dismiss();
+    setSelectedEvent({ event, place });
+  }
+
+  function handleSelectUser(user: MockCampusUser) {
+    lastOverlayPressRef.current = Date.now();
+    Keyboard.dismiss();
+    setSelectedUser(user);
+  }
+
+  // Tapping a saved event from a user's profile hands off to the same event
+  // detail flow as tapping the event's own map marker — closing the profile
+  // sheet first so they don't stack.
+  function handleSelectEventFromProfile(event: CampusEvent, place: Place) {
+    setSelectedUser(null);
     setSelectedEvent({ event, place });
   }
 
@@ -583,9 +603,11 @@ export default function MapScreen() {
         constructionZones={constructionZones}
         pendingProposals={pendingProposals}
         events={events}
+        users={mockUsers}
         showConstruction={filters.showConstruction}
         showAccessibleEntrances={filters.showAccessibleEntrances}
         showEvents={filters.showEvents}
+        showUsers={filters.showUsers}
         selectedPlaceId={selectedPlace?.id ?? null}
         searchActive={searchQuery.trim().length > 0}
         activeRoute={activeRoute}
@@ -594,6 +616,7 @@ export default function MapScreen() {
         onSelectConstructionZone={handleSelectConstructionZone}
         onSelectProposal={handleSelectProposal}
         onSelectEvent={handleSelectEvent}
+        onSelectUser={handleSelectUser}
         onMapPress={handleMapPress}
         onSelectPoi={handleSelectPoi}
       />
@@ -729,6 +752,14 @@ export default function MapScreen() {
         placeName={selectedEvent?.place.officialName ?? null}
         onClose={() => setSelectedEvent(null)}
         onGetDirections={handleEventDirections}
+      />
+
+      <UserProfileSheet
+        user={selectedUser}
+        events={events}
+        places={overriddenPlaces}
+        onClose={() => setSelectedUser(null)}
+        onSelectEvent={handleSelectEventFromProfile}
       />
     </View>
   );

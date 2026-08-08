@@ -1,4 +1,4 @@
-import type { Campus, CampusEvent, ConstructionZone } from "@/types";
+import type { Campus, CampusEvent, ConstructionZone, MockCampusUser } from "@/types";
 
 /**
  * Campus-level data access. The mock implementation reads from local fixture
@@ -10,4 +10,6 @@ export interface CampusRepository {
   getCampusById(campusId: string): Promise<Campus | undefined>;
   getConstructionZones(campusId: string): Promise<ConstructionZone[]>;
   getEvents(campusId: string): Promise<CampusEvent[]>;
+  /** Demo-only "who's around" presence layer — see data/mockUsers.ts. */
+  getMockUsers(campusId: string): Promise<MockCampusUser[]>;
 }

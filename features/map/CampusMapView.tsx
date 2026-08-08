@@ -1,10 +1,11 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import MapView, { Marker, Polyline, type MapPressEvent, type PoiClickEvent, type Region } from "react-native-maps";
-import type { Campus, CampusEvent, ConstructionZone, LatLng, Place, Proposal, Route } from "@/types";
+import type { Campus, CampusEvent, ConstructionZone, LatLng, MockCampusUser, Place, Proposal, Route } from "@/types";
 import { colors, radii, shadow } from "@/constants/theme";
 import { PlaceMarker } from "./PlaceMarker";
 import { EventMarker } from "./EventMarker";
+import { UserMarker } from "./UserMarker";
 import { ConstructionZoneOverlay } from "./ConstructionZoneOverlay";
 import { AccessibleEntranceMarker } from "./AccessibleEntranceMarker";
 import { PendingProposalOverlay } from "@/features/edits/PendingProposalOverlay";
@@ -21,9 +22,11 @@ interface CampusMapViewProps {
   constructionZones: ConstructionZone[];
   pendingProposals: Proposal[];
   events: CampusEvent[];
+  users: MockCampusUser[];
   showConstruction: boolean;
   showAccessibleEntrances: boolean;
   showEvents: boolean;
+  showUsers: boolean;
   selectedPlaceId: string | null;
   /** True while a search query is narrowing `places` — forces labels on for every result, bypassing zoom culling. */
   searchActive: boolean;
@@ -34,6 +37,7 @@ interface CampusMapViewProps {
   onSelectConstructionZone: (zone: ConstructionZone) => void;
   onSelectProposal: (proposal: Proposal) => void;
   onSelectEvent: (event: CampusEvent, place: Place) => void;
+  onSelectUser: (user: MockCampusUser) => void;
   onMapPress: (coordinate: LatLng) => void;
   /**
    * Tapping a titled point of interest baked into the map tiles themselves
@@ -139,9 +143,11 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     constructionZones,
     pendingProposals,
     events,
+    users,
     showConstruction,
     showAccessibleEntrances,
     showEvents,
+    showUsers,
     selectedPlaceId,
     searchActive,
     activeRoute,
@@ -150,6 +156,7 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     onSelectConstructionZone,
     onSelectProposal,
     onSelectEvent,
+    onSelectUser,
     onMapPress,
     onSelectPoi,
   },
@@ -250,6 +257,9 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
             onPress={() => onSelectEvent(event, place)}
           />
         ))}
+
+        {showUsers &&
+          users.map((user) => <UserMarker key={user.id} user={user} onPress={onSelectUser} />)}
 
         {showAccessibleEntrances &&
           places.flatMap((place) =>

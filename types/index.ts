@@ -7,3 +7,4 @@ export * from "./route";
 export * from "./proposal";
 export * from "./accessibilityReport";
 export * from "./discoverPost";
+export * from "./mockUser";
