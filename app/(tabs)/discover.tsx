@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import type { DiscoverPostType, Place } from "@/types";
+import type { AccessibilityIssueType, DiscoverPost, DiscoverPostType, Place } from "@/types";
 import { DISCOVER_POST_TYPE_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { DiscoverPostCard } from "@/features/discover/DiscoverPostCard";
 import { ShareDiscoverPostSheet } from "@/features/discover/ShareDiscoverPostSheet";
+import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { IconButton } from "@/components/IconButton";
 import { useDiscoverPosts } from "@/hooks/useDiscoverPosts";
-import { discoverPostRepository, placeRepository } from "@/services/repositories";
+import { accessibilityReportRepository, discoverPostRepository, placeRepository } from "@/services/repositories";
 import { useAppStore } from "@/store/useAppStore";
 import { useUserStore } from "@/store/useUserStore";
 
@@ -30,6 +31,8 @@ export default function DiscoverScreen() {
   const [activeFilter, setActiveFilter] = useState<DiscoverPostType | "all">("all");
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const [upvotedIds, setUpvotedIds] = useState<Set<string>>(new Set());
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
+  const [flaggingPost, setFlaggingPost] = useState<DiscoverPost | null>(null);
 
   useEffect(() => {
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
@@ -46,6 +49,25 @@ export default function DiscoverScreen() {
     if (!uid) return;
     setUpvotedIds((previous) => new Set(previous).add(postId));
     await discoverPostRepository.upvote(postId, uid);
+  }
+
+  // Escalates a casual Discover post into a real, routing-affecting
+  // AccessibilityReport — the manual "flag" version: the student confirms
+  // the issue type and description themselves rather than us guessing from
+  // the post text, so nothing gets misclassified automatically.
+  async function handleSubmitFlaggedReport(details: { issueType: AccessibilityIssueType; description: string }) {
+    if (!uid || !flaggingPost) return;
+    await accessibilityReportRepository.submitReport(uid, {
+      placeId: flaggingPost.placeId,
+      issueType: details.issueType,
+      description: details.description,
+    });
+    setFlaggedIds((previous) => new Set(previous).add(flaggingPost.id));
+    setFlaggingPost(null);
+    Alert.alert(
+      "Reported",
+      "This is now tracked as a real accessibility issue and will affect walking directions to this location."
+    );
   }
 
   return (
@@ -84,7 +106,9 @@ export default function DiscoverScreen() {
             post={item}
             placeName={placesById.get(item.placeId)?.officialName ?? "Campus"}
             hasUpvoted={upvotedIds.has(item.id)}
+            isFlagged={flaggedIds.has(item.id)}
             onUpvote={(post) => handleUpvote(post.id)}
+            onFlag={setFlaggingPost}
             onPressPlace={() => router.push({ pathname: "/place/[id]", params: { id: item.placeId } })}
           />
         )}
@@ -111,6 +135,16 @@ export default function DiscoverScreen() {
           await discoverPostRepository.submitPost(uid, details);
           setShareSheetVisible(false);
         }}
+      />
+
+      <ReportAccessibilityIssueSheet
+        visible={flaggingPost !== null}
+        placeName={flaggingPost ? placesById.get(flaggingPost.placeId)?.officialName ?? "Campus" : ""}
+        initialDescription={
+          flaggingPost ? (flaggingPost.title ? `${flaggingPost.title}: ${flaggingPost.description}` : flaggingPost.description) : ""
+        }
+        onCancel={() => setFlaggingPost(null)}
+        onSubmit={handleSubmitFlaggedReport}
       />
     </View>
   );

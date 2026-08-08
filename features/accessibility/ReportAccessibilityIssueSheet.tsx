@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,8 @@ const ISSUE_TYPES = Object.keys(ACCESSIBILITY_ISSUE_META) as AccessibilityIssueT
 interface ReportAccessibilityIssueSheetProps {
   visible: boolean;
   placeName: string;
+  /** Pre-fills the description — e.g. when escalating an existing Discover post into a real report. */
+  initialDescription?: string;
   onCancel: () => void;
   onSubmit: (details: { issueType: AccessibilityIssueType; description: string }) => Promise<void>;
 }
@@ -17,16 +19,24 @@ interface ReportAccessibilityIssueSheetProps {
 export function ReportAccessibilityIssueSheet({
   visible,
   placeName,
+  initialDescription,
   onCancel,
   onSubmit,
 }: ReportAccessibilityIssueSheetProps) {
   const [issueType, setIssueType] = useState<AccessibilityIssueType>("elevator-out");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription ?? "");
   const [submitting, setSubmitting] = useState(false);
+
+  // Re-seed the description whenever the sheet is (re)opened — it stays
+  // mounted between opens, so state wouldn't otherwise pick up a new
+  // initialDescription (e.g. flagging a different Discover post next).
+  useEffect(() => {
+    if (visible) setDescription(initialDescription ?? "");
+  }, [visible, initialDescription]);
 
   function reset() {
     setIssueType("elevator-out");
-    setDescription("");
+    setDescription(initialDescription ?? "");
     setSubmitting(false);
   }
 

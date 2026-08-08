@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -17,6 +17,7 @@ import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 import { getAccessibilitySummary } from "./accessibilitySummary";
+import { ChooseOriginSheet } from "./ChooseOriginSheet";
 import { PlacePickerSheet } from "./PlacePickerSheet";
 import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { formatDistanceMeters } from "@/features/routing/geo";
@@ -51,6 +52,7 @@ export function PlacePreviewCard({
   onSubmitAccessibilityReport,
 }: PlacePreviewCardProps) {
   const [originPickerVisible, setOriginPickerVisible] = useState(false);
+  const [chooseOriginVisible, setChooseOriginVisible] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   // Places found via the map/geocoding service (see services/geocoding) rather than
   // curated in data/places.ts — there's no full detail page for these to open.
@@ -78,11 +80,7 @@ export function PlacePreviewCard({
   }
 
   function handleDirectionsPress() {
-    Alert.alert(`Directions to ${place.officialName}`, "Start from where?", [
-      { text: "My Location", onPress: () => onDirections(place) },
-      { text: "Choose starting point...", onPress: () => setOriginPickerVisible(true) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setChooseOriginVisible(true);
   }
 
   const panGesture = Gesture.Pan()
@@ -252,6 +250,20 @@ export function PlacePreviewCard({
           </Pressable>
         </SafeAreaView>
       </Animated.View>
+
+      <ChooseOriginSheet
+        visible={chooseOriginVisible}
+        placeName={place.officialName}
+        onMyLocation={() => {
+          setChooseOriginVisible(false);
+          onDirections(place);
+        }}
+        onChooseStartingPoint={() => {
+          setChooseOriginVisible(false);
+          setOriginPickerVisible(true);
+        }}
+        onCancel={() => setChooseOriginVisible(false)}
+      />
 
       <PlacePickerSheet
         visible={originPickerVisible}

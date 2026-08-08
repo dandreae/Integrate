@@ -10,6 +10,7 @@ import { ACCESSIBILITY_FEATURE_META, PLACE_CATEGORY_META } from "@/constants/cat
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
 import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { getAccessibilitySummary } from "@/features/places/accessibilitySummary";
+import { ChooseOriginSheet } from "@/features/places/ChooseOriginSheet";
 import { PlacePickerSheet } from "@/features/places/PlacePickerSheet";
 import { formatDistanceMeters, haversineDistanceMeters } from "@/features/routing/geo";
 import { useAccessibilityReports } from "@/hooks/useAccessibilityReports";
@@ -30,6 +31,7 @@ export default function PlaceDetailScreen() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [campusPlaces, setCampusPlaces] = useState<Place[]>([]);
   const [originPickerVisible, setOriginPickerVisible] = useState(false);
+  const [chooseOriginVisible, setChooseOriginVisible] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const placeOverrides = usePlaceOverrides();
   const accessibilityReports = useAccessibilityReports();
@@ -78,11 +80,7 @@ export default function PlaceDetailScreen() {
 
   function handleDirectionsPress() {
     if (!place) return;
-    Alert.alert(`Directions to ${place.officialName}`, "Start from where?", [
-      { text: "My Location", onPress: handleDirections },
-      { text: "Choose starting point...", onPress: () => setOriginPickerVisible(true) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setChooseOriginVisible(true);
   }
 
   function handleDirectionsFrom(origin: Place) {
@@ -283,6 +281,20 @@ export default function PlaceDetailScreen() {
           <Text style={styles.directionsLabel}>Directions</Text>
         </Pressable>
       </SafeAreaView>
+
+      <ChooseOriginSheet
+        visible={chooseOriginVisible}
+        placeName={place.officialName}
+        onMyLocation={() => {
+          setChooseOriginVisible(false);
+          handleDirections();
+        }}
+        onChooseStartingPoint={() => {
+          setChooseOriginVisible(false);
+          setOriginPickerVisible(true);
+        }}
+        onCancel={() => setChooseOriginVisible(false)}
+      />
 
       <PlacePickerSheet
         visible={originPickerVisible}

@@ -10,11 +10,21 @@ interface DiscoverPostCardProps {
   /** Resolved from post.placeId — every post links a real place, so this should always be present. */
   placeName: string;
   hasUpvoted: boolean;
+  isFlagged: boolean;
   onUpvote: (post: DiscoverPost) => void;
+  onFlag: (post: DiscoverPost) => void;
   onPressPlace: () => void;
 }
 
-export function DiscoverPostCard({ post, placeName, hasUpvoted, onUpvote, onPressPlace }: DiscoverPostCardProps) {
+export function DiscoverPostCard({
+  post,
+  placeName,
+  hasUpvoted,
+  isFlagged,
+  onUpvote,
+  onFlag,
+  onPressPlace,
+}: DiscoverPostCardProps) {
   const meta = DISCOVER_POST_TYPE_META[post.type];
   const expired = isExpiredPost(post.expiresAt);
   const locationText = post.locationDetail ? `${placeName} — ${post.locationDetail}` : placeName;
@@ -43,6 +53,24 @@ export function DiscoverPostCard({ post, placeName, hasUpvoted, onUpvote, onPres
       </Pressable>
 
       <View style={styles.footerRow}>
+        <Pressable
+          onPress={() => onFlag(post)}
+          disabled={isFlagged}
+          accessibilityRole="button"
+          accessibilityLabel={isFlagged ? "Flagged as an accessibility issue" : "Flag as an accessibility issue"}
+          accessibilityState={{ selected: isFlagged }}
+          style={styles.flagButton}
+        >
+          <Ionicons
+            name={isFlagged ? "warning" : "warning-outline"}
+            size={16}
+            color={isFlagged ? colors.warning : colors.textSecondary}
+          />
+          <Text style={[styles.flagText, isFlagged && styles.flagTextActive]}>
+            {isFlagged ? "Flagged" : "Flag issue"}
+          </Text>
+        </Pressable>
+
         {expired ? (
           <Text style={styles.expiredText}>No longer valid</Text>
         ) : (
@@ -127,8 +155,24 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: spacing.sm,
+  },
+  flagButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  flagText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  flagTextActive: {
+    color: colors.warning,
+    fontWeight: "600",
   },
   upvoteButton: {
     flexDirection: "row",
