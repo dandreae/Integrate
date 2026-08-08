@@ -67,7 +67,7 @@ export function PlacePreviewCard({
   );
 
   const { height: windowHeight } = useWindowDimensions();
-  const panelHeight = windowHeight * 0.46;
+  const maxPanelHeight = windowHeight * 0.85;
 
   const translateY = useSharedValue(0);
 
@@ -98,12 +98,12 @@ export function PlacePreviewCard({
 
   return (
     <Animated.View
-      style={[styles.wrapper, { height: panelHeight }]}
+      style={styles.wrapper}
       entering={SlideInDown.duration(220)}
       accessibilityViewIsModal
     >
-      <Animated.View style={[styles.dragFill, dragStyle]}>
-        <SafeAreaView edges={["bottom"]} style={styles.card}>
+      <Animated.View style={dragStyle}>
+        <SafeAreaView edges={["bottom"]} style={[styles.card, { maxHeight: maxPanelHeight }]}>
           <GestureDetector gesture={panGesture}>
             <View style={styles.dragZone}>
               <View style={styles.handle} />
@@ -297,11 +297,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  dragFill: {
-    flex: 1,
-  },
   card: {
-    flex: 1,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,
@@ -310,7 +306,7 @@ const styles = StyleSheet.create({
     ...shadow.floating,
   },
   scrollBody: {
-    flex: 1,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingBottom: spacing.sm,
