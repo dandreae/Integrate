@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type {
   AccessibilityIssueType,
+  AccessibilityReport,
   Campus,
   CampusEvent,
   ConstructionSeverity,
@@ -576,7 +577,7 @@ export default function MapScreen() {
 
   async function handleSubmitAccessibilityReport(
     place: Place,
-    details: { issueType: AccessibilityIssueType; description: string }
+    details: { issueType: AccessibilityIssueType; description: string; severity: AccessibilityReport["severity"] }
   ) {
     if (!uid) {
       Alert.alert("Not ready yet", "Still setting up your account — try again in a moment.");
@@ -586,7 +587,18 @@ export default function MapScreen() {
       placeId: place.id,
       issueType: details.issueType,
       description: details.description,
+      severity: details.severity,
     });
+  }
+
+  function handleConfirmReportStillActive(report: AccessibilityReport) {
+    if (!uid) return;
+    accessibilityReportRepository.confirmStillActive(report.id, uid);
+  }
+
+  function handleConfirmReportFixed(report: AccessibilityReport) {
+    if (!uid) return;
+    accessibilityReportRepository.confirmFixed(report.id, uid);
   }
 
   // Directions requested from the full place detail screen: it signals the
@@ -741,6 +753,8 @@ export default function MapScreen() {
           onDirections={handleDirections}
           onDirectionsFrom={handleDirectionsBetween}
           onSubmitAccessibilityReport={handleSubmitAccessibilityReport}
+          onConfirmReportStillActive={handleConfirmReportStillActive}
+          onConfirmReportFixed={handleConfirmReportFixed}
         />
       )}
 

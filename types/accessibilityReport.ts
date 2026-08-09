@@ -7,6 +7,17 @@ export type AccessibilityIssueType =
 
 export type AccessibilityReportStatus = "active" | "resolved";
 
+/** How disruptive the issue is — drives how long it stays flagged without reconfirmation. */
+export type AccessibilityReportSeverity = "low" | "medium" | "high";
+
+/**
+ * How much a viewer should trust the currently displayed status. Computed
+ * client-side (see services/accessibility/reportConfidence.ts) from
+ * confirmCount/lastConfirmedAt/expiresAt — never stored, since it changes
+ * with the passage of time alone, not just writes.
+ */
+export type AccessibilityReportConfidence = "critical" | "community" | "verified";
+
 export interface AccessibilityReport {
   id: string;
   placeId: string;
@@ -14,13 +25,27 @@ export interface AccessibilityReport {
   entranceId?: string;
   issueType: AccessibilityIssueType;
   description: string;
-  /** ISO timestamp. */
+  severity: AccessibilityReportSeverity;
+  /** ISO timestamp the report was originally submitted. */
   reportedAt: string;
+  /** ISO timestamp of the most recent "still an issue" or "fixed" confirmation. Starts equal to `reportedAt`. */
+  lastConfirmedAt: string;
+  /**
+   * ISO timestamp after which this report is no longer treated as active
+   * (routing/UI) absent a fresh confirmation. Recomputed from `severity` and
+   * pushed forward every time `lastConfirmedAt` advances — a report that
+   * keeps getting reconfirmed never goes stale; one nobody revisits does.
+   */
+  expiresAt: string;
   status: AccessibilityReportStatus;
   /** How many other students have confirmed this is still an issue. */
   confirmCount: number;
+  /** How many other students have confirmed this was fixed. */
+  fixedCount: number;
   /** Present on live (Firestore) reports; absent on seeded demo data. */
   submittedBy?: string;
+  /** ISO timestamp the report was resolved, when known. */
+  resolvedAt?: string;
 }
 
 export interface NewAccessibilityReportPayload {
@@ -28,6 +53,7 @@ export interface NewAccessibilityReportPayload {
   entranceId?: string;
   issueType: AccessibilityIssueType;
   description: string;
+  severity: AccessibilityReportSeverity;
 }
 
 export const ACCESSIBILITY_ISSUE_META: Record<

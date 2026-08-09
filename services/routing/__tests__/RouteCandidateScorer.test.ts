@@ -34,15 +34,24 @@ function accessibleEntrance(overrides: Partial<Entrance> = {}): Entrance {
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function report(overrides: Partial<AccessibilityReport> = {}): AccessibilityReport {
+  const reportedAt = new Date(Date.now() - DAY_MS).toISOString();
   return {
     id: "r1",
     placeId: "dest-place",
     issueType: "elevator-out",
     description: "Elevator is out of service.",
-    reportedAt: "2026-01-01T00:00:00.000Z",
+    severity: "medium",
+    reportedAt,
+    lastConfirmedAt: reportedAt,
+    // Comfortably within the "medium" 7-day expiration window by default —
+    // individual tests override this to exercise expiry.
+    expiresAt: new Date(Date.now() + 6 * DAY_MS).toISOString(),
     status: "active",
     confirmCount: 2,
+    fixedCount: 0,
     ...overrides,
   };
 }
@@ -209,6 +218,19 @@ describe("scoreCandidate", () => {
     expect(reported.score).toBeGreaterThan(clear.score);
     expect(reported.matchedAccessibilityReports).toHaveLength(1);
     expect(reported.warnings.some((w) => w.type === "accessibility-report")).toBe(true);
+  });
+
+  it("ignores an active report that expired without a recent reconfirmation", () => {
+    const expired = scoreCandidate({
+      candidate: straightCandidate(),
+      entranceCandidate: entranceCandidate(),
+      preference: "accessible",
+      constructionZones: [],
+      accessibilityReports: [report({ expiresAt: new Date(Date.now() - DAY_MS).toISOString() })],
+      destinationPlaceId: "dest-place",
+    });
+    expect(expired.matchedAccessibilityReports).toHaveLength(0);
+    expect(expired.warnings.some((w) => w.type === "accessibility-report")).toBe(false);
   });
 
   it("ignores a resolved report and a report for a different place", () => {

@@ -10,8 +10,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { AccessibilityIssueType, AccessibilityReport, Place } from "@/types";
-import { ACCESSIBILITY_ISSUE_META } from "@/types";
+import type { AccessibilityIssueType, AccessibilityReport, AccessibilityReportSeverity, Place } from "@/types";
 import { Badge } from "@/components/Badge";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
@@ -19,8 +18,10 @@ import { useSavedPlacesStore } from "@/store/useSavedPlacesStore";
 import { getAccessibilitySummary } from "./accessibilitySummary";
 import { ChooseOriginSheet } from "./ChooseOriginSheet";
 import { PlacePickerSheet } from "./PlacePickerSheet";
+import { AccessibilityReportBanner } from "@/features/accessibility/AccessibilityReportBanner";
 import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { formatDistanceMeters } from "@/features/routing/geo";
+import { shouldDisplayReport } from "@/services/accessibility/reportConfidence";
 
 const DISMISS_THRESHOLD = 90;
 const DISMISS_VELOCITY = 800;
@@ -36,8 +37,10 @@ interface PlacePreviewCardProps {
   onDirectionsFrom: (origin: Place, destination: Place) => void;
   onSubmitAccessibilityReport: (
     place: Place,
-    payload: { issueType: AccessibilityIssueType; description: string }
+    payload: { issueType: AccessibilityIssueType; description: string; severity: AccessibilityReportSeverity }
   ) => Promise<void>;
+  onConfirmReportStillActive: (report: AccessibilityReport) => void;
+  onConfirmReportFixed: (report: AccessibilityReport) => void;
 }
 
 export function PlacePreviewCard({
@@ -50,6 +53,8 @@ export function PlacePreviewCard({
   onDirections,
   onDirectionsFrom,
   onSubmitAccessibilityReport,
+  onConfirmReportStillActive,
+  onConfirmReportFixed,
 }: PlacePreviewCardProps) {
   const [originPickerVisible, setOriginPickerVisible] = useState(false);
   const [chooseOriginVisible, setChooseOriginVisible] = useState(false);
@@ -62,8 +67,8 @@ export function PlacePreviewCard({
   const meta = PLACE_CATEGORY_META[place.category];
   const accessibilitySummary = getAccessibilitySummary(place);
   const hasAccessibleEntrance = place.entrances.some((entrance) => entrance.isAccessible);
-  const activeReports = accessibilityReports.filter(
-    (report) => report.placeId === place.id && report.status === "active"
+  const visibleReports = accessibilityReports.filter(
+    (report) => report.placeId === place.id && shouldDisplayReport(report)
   );
 
   const { height: windowHeight } = useWindowDimensions();
@@ -207,13 +212,13 @@ export function PlacePreviewCard({
               </Text>
             </View>
 
-            {activeReports.map((report) => (
-              <View key={report.id} style={styles.reportBanner}>
-                <Ionicons name={ACCESSIBILITY_ISSUE_META[report.issueType].icon} size={16} color={colors.danger} />
-                <Text style={styles.reportBannerText}>
-                  {ACCESSIBILITY_ISSUE_META[report.issueType].label}: {report.description}
-                </Text>
-              </View>
+            {visibleReports.map((report) => (
+              <AccessibilityReportBanner
+                key={report.id}
+                report={report}
+                onConfirmStillActive={() => onConfirmReportStillActive(report)}
+                onConfirmFixed={() => onConfirmReportFixed(report)}
+              />
             ))}
 
             <Pressable
@@ -399,20 +404,6 @@ const styles = StyleSheet.create({
   metaText: {
     ...typography.caption,
     color: colors.textSecondary,
-  },
-  reportBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.sm,
-    backgroundColor: colors.dangerMuted,
-  },
-  reportBannerText: {
-    ...typography.caption,
-    color: colors.danger,
-    flex: 1,
   },
   reportButton: {
     flexDirection: "row",

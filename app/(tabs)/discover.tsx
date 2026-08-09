@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import type { AccessibilityIssueType, DiscoverPost, DiscoverPostType, Place } from "@/types";
+import type { AccessibilityIssueType, AccessibilityReportSeverity, DiscoverPost, DiscoverPostType, Place } from "@/types";
 import { DISCOVER_POST_TYPE_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { DiscoverPostCard } from "@/features/discover/DiscoverPostCard";
@@ -55,12 +55,17 @@ export default function DiscoverScreen() {
   // AccessibilityReport — the manual "flag" version: the student confirms
   // the issue type and description themselves rather than us guessing from
   // the post text, so nothing gets misclassified automatically.
-  async function handleSubmitFlaggedReport(details: { issueType: AccessibilityIssueType; description: string }) {
+  async function handleSubmitFlaggedReport(details: {
+    issueType: AccessibilityIssueType;
+    description: string;
+    severity: AccessibilityReportSeverity;
+  }) {
     if (!uid || !flaggingPost) return;
     await accessibilityReportRepository.submitReport(uid, {
       placeId: flaggingPost.placeId,
       issueType: details.issueType,
       description: details.description,
+      severity: details.severity,
     });
     setFlaggedIds((previous) => new Set(previous).add(flaggingPost.id));
     setFlaggingPost(null);

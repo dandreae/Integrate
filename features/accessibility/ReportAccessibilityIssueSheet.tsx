@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { ACCESSIBILITY_ISSUE_META, type AccessibilityIssueType } from "@/types";
+import { ACCESSIBILITY_ISSUE_META, type AccessibilityIssueType, type AccessibilityReportSeverity } from "@/types";
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
 
 const ISSUE_TYPES = Object.keys(ACCESSIBILITY_ISSUE_META) as AccessibilityIssueType[];
+const SEVERITIES: AccessibilityReportSeverity[] = ["low", "medium", "high"];
 
 interface ReportAccessibilityIssueSheetProps {
   visible: boolean;
@@ -13,7 +14,11 @@ interface ReportAccessibilityIssueSheetProps {
   /** Pre-fills the description — e.g. when escalating an existing Discover post into a real report. */
   initialDescription?: string;
   onCancel: () => void;
-  onSubmit: (details: { issueType: AccessibilityIssueType; description: string }) => Promise<void>;
+  onSubmit: (details: {
+    issueType: AccessibilityIssueType;
+    description: string;
+    severity: AccessibilityReportSeverity;
+  }) => Promise<void>;
 }
 
 export function ReportAccessibilityIssueSheet({
@@ -24,6 +29,7 @@ export function ReportAccessibilityIssueSheet({
   onSubmit,
 }: ReportAccessibilityIssueSheetProps) {
   const [issueType, setIssueType] = useState<AccessibilityIssueType>("elevator-out");
+  const [severity, setSeverity] = useState<AccessibilityReportSeverity>("medium");
   const [description, setDescription] = useState(initialDescription ?? "");
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,6 +42,7 @@ export function ReportAccessibilityIssueSheet({
 
   function reset() {
     setIssueType("elevator-out");
+    setSeverity("medium");
     setDescription(initialDescription ?? "");
     setSubmitting(false);
   }
@@ -49,7 +56,7 @@ export function ReportAccessibilityIssueSheet({
     if (!description.trim()) return;
     setSubmitting(true);
     try {
-      await onSubmit({ issueType, description: description.trim() });
+      await onSubmit({ issueType, description: description.trim(), severity });
       reset();
     } catch {
       Alert.alert("Couldn't submit", "Something went wrong — try again.");
@@ -100,6 +107,25 @@ export function ReportAccessibilityIssueSheet({
           multiline
           accessibilityLabel="Issue description"
         />
+
+        <Text style={styles.smallLabel}>How severe is it?</Text>
+        <View style={styles.severityRow}>
+          {SEVERITIES.map((option) => {
+            const active = option === severity;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => setSeverity(option)}
+                accessibilityRole="button"
+                accessibilityLabel={`Severity: ${option}`}
+                accessibilityState={{ selected: active }}
+                style={[styles.severityChip, active && styles.severityChipActive]}
+              >
+                <Text style={[styles.severityLabel, active && styles.severityLabelActive]}>{option}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Pressable
           onPress={handleSubmit}
@@ -196,6 +222,30 @@ const styles = StyleSheet.create({
     height: 90,
     paddingTop: spacing.sm,
     textAlignVertical: "top",
+  },
+  severityRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  severityChip: {
+    flex: 1,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  severityChipActive: {
+    backgroundColor: colors.accent,
+  },
+  severityLabel: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    textTransform: "capitalize",
+  },
+  severityLabelActive: {
+    color: colors.textInverse,
   },
   submitButton: {
     height: 52,

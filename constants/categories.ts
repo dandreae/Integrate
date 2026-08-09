@@ -1,7 +1,14 @@
 import type { ComponentProps } from "react";
 import type { Ionicons } from "@expo/vector-icons";
-import type { AccessibilityFeature, DiscoverPostType, EventCategory, FriendStatus, PlaceCategory } from "@/types";
-import { categoryColors, discoverPostTypeColors, eventCategoryColors, friendStatusColors } from "./theme";
+import type {
+  AccessibilityFeature,
+  AccessibilityReportConfidence,
+  DiscoverPostType,
+  EventCategory,
+  FriendStatus,
+  PlaceCategory,
+} from "@/types";
+import { categoryColors, colors, discoverPostTypeColors, eventCategoryColors, friendStatusColors } from "./theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -91,6 +98,18 @@ export const ACCESSIBILITY_FEATURE_META: Record<AccessibilityFeature, CategoryMe
     icon: "car-outline",
     color: categoryColors.accessible,
   },
+};
+
+export interface AccessibilityConfidenceMeta {
+  emoji: string;
+  label: string;
+  color: string;
+}
+
+export const ACCESSIBILITY_CONFIDENCE_META: Record<AccessibilityReportConfidence, AccessibilityConfidenceMeta> = {
+  verified: { emoji: "🟢", label: "Recently verified", color: colors.accessible },
+  community: { emoji: "🟡", label: "Community reported", color: colors.warning },
+  critical: { emoji: "🔴", label: "Multiple users reporting an active problem", color: colors.danger },
 };
 
 export const MAP_FILTER_CATEGORIES: PlaceCategory[] = [

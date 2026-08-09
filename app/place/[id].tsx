@@ -3,11 +3,11 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import type { AccessibilityIssueType, LatLng, Place } from "@/types";
-import { ACCESSIBILITY_ISSUE_META } from "@/types";
+import type { AccessibilityIssueType, AccessibilityReport, LatLng, Place } from "@/types";
 import { Badge } from "@/components/Badge";
 import { ACCESSIBILITY_FEATURE_META, PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
+import { AccessibilityReportBanner } from "@/features/accessibility/AccessibilityReportBanner";
 import { ReportAccessibilityIssueSheet } from "@/features/accessibility/ReportAccessibilityIssueSheet";
 import { getAccessibilitySummary } from "@/features/places/accessibilitySummary";
 import { ChooseOriginSheet } from "@/features/places/ChooseOriginSheet";
@@ -16,6 +16,7 @@ import { formatDistanceMeters, haversineDistanceMeters } from "@/features/routin
 import { useAccessibilityReports } from "@/hooks/useAccessibilityReports";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
+import { shouldDisplayReport } from "@/services/accessibility/reportConfidence";
 import { accessibilityReportRepository, placeRepository } from "@/services/repositories";
 import { applyPlaceOverride } from "@/services/repositories/firestore/placeOverridesRepository";
 import { useDirectionsStore } from "@/store/useDirectionsStore";
@@ -93,6 +94,7 @@ export default function PlaceDetailScreen() {
   async function handleSubmitAccessibilityReport(details: {
     issueType: AccessibilityIssueType;
     description: string;
+    severity: AccessibilityReport["severity"];
   }) {
     if (!place) return;
     if (!uid) {
@@ -103,7 +105,18 @@ export default function PlaceDetailScreen() {
       placeId: place.id,
       issueType: details.issueType,
       description: details.description,
+      severity: details.severity,
     });
+  }
+
+  function handleConfirmReportStillActive(report: AccessibilityReport) {
+    if (!uid) return;
+    accessibilityReportRepository.confirmStillActive(report.id, uid);
+  }
+
+  function handleConfirmReportFixed(report: AccessibilityReport) {
+    if (!uid) return;
+    accessibilityReportRepository.confirmFixed(report.id, uid);
   }
 
   if (notFound) {
@@ -131,8 +144,8 @@ export default function PlaceDetailScreen() {
 
   const meta = PLACE_CATEGORY_META[place.category];
   const accessibilitySummary = getAccessibilitySummary(place);
-  const activeReports = accessibilityReports.filter(
-    (report) => report.placeId === place.id && report.status === "active"
+  const visibleReports = accessibilityReports.filter(
+    (report) => report.placeId === place.id && shouldDisplayReport(report)
   );
 
   return (
@@ -219,13 +232,13 @@ export default function PlaceDetailScreen() {
             </View>
           )}
 
-          {activeReports.map((report) => (
-            <View key={report.id} style={styles.reportBanner}>
-              <Ionicons name={ACCESSIBILITY_ISSUE_META[report.issueType].icon} size={16} color={colors.danger} />
-              <Text style={styles.reportBannerText}>
-                {ACCESSIBILITY_ISSUE_META[report.issueType].label}: {report.description}
-              </Text>
-            </View>
+          {visibleReports.map((report) => (
+            <AccessibilityReportBanner
+              key={report.id}
+              report={report}
+              onConfirmStillActive={() => handleConfirmReportStillActive(report)}
+              onConfirmFixed={() => handleConfirmReportFixed(report)}
+            />
           ))}
 
           <Pressable
@@ -405,20 +418,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
     marginTop: spacing.sm,
-  },
-  reportBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.sm,
-    backgroundColor: colors.dangerMuted,
-  },
-  reportBannerText: {
-    ...typography.caption,
-    color: colors.danger,
-    flex: 1,
   },
   reportButton: {
     flexDirection: "row",

@@ -20,7 +20,7 @@ export function buildRouteCacheKey(
     .sort()
     .join(",");
   const reportFingerprint = accessibilityReports
-    .map((r) => `${r.id}:${r.status}:${r.confirmCount}`)
+    .map((r) => `${r.id}:${r.status}:${r.confirmCount}:${r.fixedCount}:${r.expiresAt}`)
     .sort()
     .join(",");
   const preferencesFingerprint = accessibilityPreferences

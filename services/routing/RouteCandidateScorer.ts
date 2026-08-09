@@ -10,6 +10,7 @@ import type {
 import { ACCESSIBILITY_ISSUE_META } from "@/types";
 import { ROUTING_CONFIG } from "@/constants/routing";
 import { distanceToSegmentMeters } from "@/features/routing/geo";
+import { isEffectivelyActive } from "@/services/accessibility/reportConfidence";
 import type { ProviderRouteCandidate } from "./RoutingProvider";
 import type { EntranceCandidate } from "./entranceSelection";
 
@@ -86,7 +87,10 @@ export function scoreCandidate({
   );
 
   const matchedAccessibilityReports = accessibilityReports.filter((report) => {
-    if (report.status !== "active") return false;
+    // Not just `status === "active"` — a report nobody has reconfirmed in
+    // weeks shouldn't keep penalizing routes forever (see
+    // services/accessibility/reportConfidence.ts).
+    if (!isEffectivelyActive(report)) return false;
     if (!destinationPlaceId || report.placeId !== destinationPlaceId) return false;
     // A report scoped to one entrance shouldn't penalize routes using a different entrance of the same place.
     if (report.entranceId && entranceCandidate.entrance?.id !== report.entranceId) return false;
