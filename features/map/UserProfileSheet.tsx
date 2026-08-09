@@ -5,13 +5,14 @@ import type { CampusEvent, MockCampusUser, Place } from "@/types";
 import { EVENT_CATEGORY_META, FRIEND_STATUS_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { formatRelativeEventDate } from "@/features/events/eventDate";
+import { resolveEventPlace } from "@/features/events/eventPlace";
 
 interface UserProfileSheetProps {
   user: MockCampusUser | null;
   events: CampusEvent[];
   places: Place[];
   onClose: () => void;
-  onSelectEvent: (event: CampusEvent, place: Place) => void;
+  onSelectEvent: (event: CampusEvent) => void;
 }
 
 export function UserProfileSheet({ user, events, places, onClose, onSelectEvent }: UserProfileSheetProps) {
@@ -58,13 +59,12 @@ export function UserProfileSheet({ user, events, places, onClose, onSelectEvent 
         </Text>
 
         {savedEvents.map((event) => {
-          const place = places.find((p) => p.id === event.locationId);
+          const place = resolveEventPlace(event, places);
           const meta = EVENT_CATEGORY_META[event.category];
           return (
             <Pressable
               key={event.id}
-              onPress={() => place && onSelectEvent(event, place)}
-              disabled={!place}
+              onPress={() => onSelectEvent(event)}
               accessibilityRole="button"
               accessibilityLabel={`Open event ${event.title}`}
               style={styles.eventRow}

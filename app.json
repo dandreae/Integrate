@@ -21,7 +21,8 @@
       "package": "com.integrate.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -41,7 +42,13 @@
     "plugins": [
       "expo-router",
       "expo-location",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#0B2E59"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

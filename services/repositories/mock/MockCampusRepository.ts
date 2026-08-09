@@ -1,5 +1,5 @@
-import type { Campus, CampusEvent, ConstructionZone, MockCampusUser } from "@/types";
-import { CAMPUSES, CAMPUS_EVENTS, CONSTRUCTION_ZONES, MOCK_CAMPUS_USERS } from "@/data";
+import type { Campus, ConstructionZone, MockCampusUser } from "@/types";
+import { CAMPUSES, CONSTRUCTION_ZONES, MOCK_CAMPUS_USERS } from "@/data";
 import type { CampusRepository } from "../CampusRepository";
 
 /**
@@ -18,10 +18,6 @@ export class MockCampusRepository implements CampusRepository {
 
   async getConstructionZones(campusId: string): Promise<ConstructionZone[]> {
     return CONSTRUCTION_ZONES.filter((zone) => zone.campusId === campusId);
-  }
-
-  async getEvents(campusId: string): Promise<CampusEvent[]> {
-    return CAMPUS_EVENTS.filter((event) => event.campusId === campusId);
   }
 
   async getMockUsers(campusId: string): Promise<MockCampusUser[]> {

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { CampusEvent } from "@/types";
 import { Badge } from "@/components/Badge";
 import { EVENT_CATEGORY_META } from "@/constants/categories";
-import { colors, radii, shadow, spacing, typography } from "@/constants/theme";
+import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
+import { REMINDER_LEAD_MINUTES, cancelEventReminder, scheduleEventReminder } from "@/services/notifications/eventReminders";
+import { useSavedEventsStore } from "@/store/useSavedEventsStore";
 import { formatRelativeEventDate } from "./eventDate";
 
 interface EventDetailSheetProps {
@@ -21,12 +24,51 @@ const POPULARITY_LABEL: Record<CampusEvent["expectedPopularity"], string> = {
 };
 
 export function EventDetailSheet({ event, placeName, onClose, onGetDirections }: EventDetailSheetProps) {
+  const isSaved = useSavedEventsStore((state) => (event ? state.isSaved(event.id) : false));
+  const hasReminder = useSavedEventsStore((state) => (event ? state.hasReminder(event.id) : false));
+  const toggleSaved = useSavedEventsStore((state) => state.toggleSaved);
+  const setReminder = useSavedEventsStore((state) => state.setReminder);
+  const [reminderBusy, setReminderBusy] = useState(false);
+
   const visible = event !== null;
   if (!event) return null;
 
   const meta = EVENT_CATEGORY_META[event.category];
   const relativeDate = formatRelativeEventDate(event.date);
   const isToday = relativeDate === "Today";
+
+  function handleToggleSaved() {
+    if (!event) return;
+    const wasSaved = isSaved;
+    toggleSaved(event.id);
+    if (wasSaved && hasReminder) {
+      cancelEventReminder(event.id);
+    }
+  }
+
+  async function handleToggleReminder() {
+    if (!event || reminderBusy) return;
+    setReminderBusy(true);
+    try {
+      if (hasReminder) {
+        await cancelEventReminder(event.id);
+        setReminder(event.id, false);
+        return;
+      }
+      if (!isSaved) toggleSaved(event.id);
+      const scheduled = await scheduleEventReminder(event);
+      if (scheduled) {
+        setReminder(event.id, true);
+      } else {
+        Alert.alert(
+          "Couldn't set reminder",
+          "Either notifications aren't allowed, or this event starts too soon for a reminder."
+        );
+      }
+    } finally {
+      setReminderBusy(false);
+    }
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -37,9 +79,31 @@ export function EventDetailSheet({ event, placeName, onClose, onGetDirections }:
           <Text style={styles.title} numberOfLines={2}>
             {event.title}
           </Text>
-          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={8}>
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={handleToggleSaved}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? "Remove from saved events" : "Save this event"}
+              accessibilityState={{ selected: isSaved }}
+              hitSlop={8}
+              style={styles.headerActionButton}
+            >
+              <Ionicons
+                name={isSaved ? "bookmark" : "bookmark-outline"}
+                size={22}
+                color={isSaved ? colors.accent : colors.textSecondary}
+              />
+            </Pressable>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+              style={styles.headerActionButton}
+            >
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.badgeRow}>
@@ -62,6 +126,24 @@ export function EventDetailSheet({ event, placeName, onClose, onGetDirections }:
         )}
 
         <Text style={styles.popularityText}>{POPULARITY_LABEL[event.expectedPopularity]}</Text>
+
+        <Pressable
+          onPress={handleToggleReminder}
+          disabled={reminderBusy}
+          accessibilityRole="button"
+          accessibilityLabel={hasReminder ? `Cancel reminder for ${event.title}` : `Remind me before ${event.title}`}
+          accessibilityState={{ selected: hasReminder, disabled: reminderBusy }}
+          style={[styles.reminderButton, hasReminder && styles.reminderButtonActive]}
+        >
+          <Ionicons
+            name={hasReminder ? "notifications" : "notifications-outline"}
+            size={16}
+            color={hasReminder ? colors.textInverse : colors.accent}
+          />
+          <Text style={[styles.reminderButtonLabel, hasReminder && styles.reminderButtonLabelActive]}>
+            {hasReminder ? `Reminder set (${REMINDER_LEAD_MINUTES} min before)` : "Remind me"}
+          </Text>
+        </Pressable>
 
         <Pressable
           onPress={onGetDirections}
@@ -104,6 +186,40 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: spacing.md,
+  },
+  headerActions: {
+    flexDirection: "row",
+  },
+  headerActionButton: {
+    width: touchTarget.minimum,
+    height: touchTarget.minimum,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reminderButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
+    minHeight: touchTarget.minimum,
+  },
+  reminderButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  reminderButtonLabel: {
+    ...typography.caption,
+    fontWeight: "600",
+    color: colors.accent,
+  },
+  reminderButtonLabelActive: {
+    color: colors.textInverse,
   },
   title: {
     ...typography.h3,

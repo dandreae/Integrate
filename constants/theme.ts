@@ -53,6 +53,7 @@ export const eventCategoryColors: Record<string, string> = {
   academic: "#3B5FE0",
   market: "#4FAE32",
   meeting: "#4A90A4",
+  other: "#8A8478",
 };
 
 export const discoverPostTypeColors: Record<string, string> = {

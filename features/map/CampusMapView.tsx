@@ -36,7 +36,7 @@ interface CampusMapViewProps {
   onSelectPlace: (place: Place) => void;
   onSelectConstructionZone: (zone: ConstructionZone) => void;
   onSelectProposal: (proposal: Proposal) => void;
-  onSelectEvent: (event: CampusEvent, place: Place) => void;
+  onSelectEvent: (event: CampusEvent) => void;
   onSelectUser: (user: MockCampusUser) => void;
   onMapPress: (coordinate: LatLng) => void;
   /**
@@ -179,29 +179,26 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
     [places, region, mapSize, searchActive, selectedPlaceId]
   );
 
-  // Resolves each event's locationId to a real place (and nudges the pin a
-  // few meters off that place's own marker so the two don't sit exactly on
-  // top of each other) — events whose locationId doesn't match a known
-  // place are silently skipped rather than guessing a coordinate for them.
+  // Every event an EventRepository returns already has a resolved
+  // `coordinate` (see services/events/eventLocationResolver.ts) — nudge it a
+  // few meters so an event doesn't sit exactly on top of its place's own
+  // marker, but there's no place lookup to do here anymore.
   const resolvedEvents = useMemo(() => {
     if (!showEvents) return [];
-    return events
-      .filter((event) => !isPastEvent(event.date))
-      .map((event) => {
-        const place = places.find((p) => p.id === event.locationId);
-        if (!place) return null;
-        const offsetDegrees = 0.00009; // ~10m
-        return {
-          event,
-          place,
-          coordinate: {
-            latitude: place.latitude + offsetDegrees,
-            longitude: place.longitude + offsetDegrees,
-          },
-        };
-      })
-      .filter((resolved): resolved is { event: CampusEvent; place: Place; coordinate: LatLng } => resolved !== null);
-  }, [events, places, showEvents]);
+    const offsetDegrees = 0.00009; // ~10m
+    const withCoordinate: { event: CampusEvent; coordinate: LatLng }[] = [];
+    for (const event of events) {
+      if (isPastEvent(event.date) || !event.coordinate) continue;
+      withCoordinate.push({
+        event,
+        coordinate: {
+          latitude: event.coordinate.latitude + offsetDegrees,
+          longitude: event.coordinate.longitude + offsetDegrees,
+        },
+      });
+    }
+    return withCoordinate;
+  }, [events, showEvents]);
 
   function handlePress(event: MapPressEvent) {
     onMapPress(event.nativeEvent.coordinate);
@@ -249,12 +246,12 @@ export const CampusMapView = forwardRef<MapView, CampusMapViewProps>(function Ca
           />
         ))}
 
-        {resolvedEvents.map(({ event, place, coordinate }) => (
+        {resolvedEvents.map(({ event, coordinate }) => (
           <EventMarker
             key={event.id}
             event={event}
             coordinate={coordinate}
-            onPress={() => onSelectEvent(event, place)}
+            onPress={() => onSelectEvent(event)}
           />
         ))}
 

@@ -37,6 +37,7 @@ export const EVENT_CATEGORY_META: Record<EventCategory, CategoryMeta> = {
   academic: { label: "Academic", icon: "school-outline", color: eventCategoryColors.academic },
   market: { label: "Market", icon: "basket-outline", color: eventCategoryColors.market },
   meeting: { label: "Meeting", icon: "chatbubbles-outline", color: eventCategoryColors.meeting },
+  other: { label: "Event", icon: "calendar-outline", color: eventCategoryColors.other },
 };
 
 export const DISCOVER_POST_TYPE_META: Record<DiscoverPostType, CategoryMeta> = {

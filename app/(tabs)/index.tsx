@@ -30,10 +30,17 @@ import { haversineDistanceMeters } from "@/features/routing/geo";
 import { ProposeEditSheet } from "@/features/edits/ProposeEditSheet";
 import { ConstructionZoneFormSheet } from "@/features/edits/ConstructionZoneFormSheet";
 import { EventDetailSheet } from "@/features/events/EventDetailSheet";
+import { resolveEventPlace } from "@/features/events/eventPlace";
 import { IconButton } from "@/components/IconButton";
 import { MAP_FILTER_CATEGORIES } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
-import { accessibilityReportRepository, campusRepository, placeRepository, routeRepository } from "@/services/repositories";
+import {
+  accessibilityReportRepository,
+  campusRepository,
+  eventRepository,
+  placeRepository,
+  routeRepository,
+} from "@/services/repositories";
 import {
   expandNicknameAlias,
   fetchNearbyNamedFeatures,
@@ -87,7 +94,7 @@ export default function MapScreen() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [seedConstructionZones, setSeedConstructionZones] = useState<ConstructionZone[]>([]);
   const [events, setEvents] = useState<CampusEvent[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<{ event: CampusEvent; place: Place } | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CampusEvent | null>(null);
   const [mockUsers, setMockUsers] = useState<MockCampusUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<MockCampusUser | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
@@ -132,7 +139,7 @@ export default function MapScreen() {
     campusRepository.getCampusById(selectedCampusId).then((result) => setCampus(result ?? null));
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
     campusRepository.getConstructionZones(selectedCampusId).then(setSeedConstructionZones);
-    campusRepository.getEvents(selectedCampusId).then(setEvents);
+    eventRepository.getEvents(selectedCampusId).then(setEvents);
     campusRepository.getMockUsers(selectedCampusId).then(setMockUsers);
   }, [selectedCampusId]);
 
@@ -350,10 +357,10 @@ export default function MapScreen() {
     router.push({ pathname: "/proposal/[id]", params: { id: proposal.id } });
   }
 
-  function handleSelectEvent(event: CampusEvent, place: Place) {
+  function handleSelectEvent(event: CampusEvent) {
     lastOverlayPressRef.current = Date.now();
     Keyboard.dismiss();
-    setSelectedEvent({ event, place });
+    setSelectedEvent(event);
   }
 
   function handleSelectUser(user: MockCampusUser) {
@@ -365,16 +372,16 @@ export default function MapScreen() {
   // Tapping a saved event from a user's profile hands off to the same event
   // detail flow as tapping the event's own map marker — closing the profile
   // sheet first so they don't stack.
-  function handleSelectEventFromProfile(event: CampusEvent, place: Place) {
+  function handleSelectEventFromProfile(event: CampusEvent) {
     setSelectedUser(null);
-    setSelectedEvent({ event, place });
+    setSelectedEvent(event);
   }
 
   function handleEventDirections() {
     if (!selectedEvent) return;
-    const { place } = selectedEvent;
+    const place = resolveEventPlace(selectedEvent, overriddenPlaces);
     setSelectedEvent(null);
-    handleDirections(place);
+    if (place) handleDirections(place);
   }
 
   function handleOpenDetail(place: Place) {
@@ -803,8 +810,8 @@ export default function MapScreen() {
       />
 
       <EventDetailSheet
-        event={selectedEvent?.event ?? null}
-        placeName={selectedEvent?.place.officialName ?? null}
+        event={selectedEvent}
+        placeName={selectedEvent ? resolveEventPlace(selectedEvent, overriddenPlaces)?.officialName ?? null : null}
         onClose={() => setSelectedEvent(null)}
         onGetDirections={handleEventDirections}
       />

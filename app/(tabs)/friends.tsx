@@ -7,7 +7,8 @@ import type { CampusEvent, FriendStatus, MockCampusUser, Place } from "@/types";
 import { FRIEND_STATUS_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
 import { UserProfileSheet } from "@/features/map/UserProfileSheet";
-import { campusRepository, placeRepository } from "@/services/repositories";
+import { resolveEventPlace } from "@/features/events/eventPlace";
+import { campusRepository, eventRepository, placeRepository } from "@/services/repositories";
 import { useAppStore } from "@/store/useAppStore";
 import { useFriendsStore } from "@/store/useFriendsStore";
 
@@ -27,15 +28,21 @@ export default function FriendsScreen() {
 
   useEffect(() => {
     campusRepository.getMockUsers(selectedCampusId).then(setFriends);
-    campusRepository.getEvents(selectedCampusId).then(setEvents);
+    eventRepository.getEvents(selectedCampusId).then(setEvents);
     placeRepository.getPlacesByCampus(selectedCampusId).then(setPlaces);
   }, [selectedCampusId]);
 
   const myStatusMeta = useMemo(() => (myStatus ? FRIEND_STATUS_META[myStatus] : null), [myStatus]);
 
-  function handleSelectEventFromProfile(event: CampusEvent, place: Place) {
+  function handleSelectEventFromProfile(event: CampusEvent) {
     setSelectedFriend(null);
-    router.push({ pathname: "/place/[id]", params: { id: place.id } });
+    // Only curated places have a real detail screen to open — a synthetic
+    // place resolved purely from an event's coordinate (see
+    // features/events/eventPlace.ts) has nothing further to show there.
+    const place = resolveEventPlace(event, places);
+    if (place && !place.id.startsWith("event:")) {
+      router.push({ pathname: "/place/[id]", params: { id: place.id } });
+    }
   }
 
   return (

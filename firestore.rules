@@ -153,5 +153,30 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // Cache of a public, third-party events feed (Georgetown's LiveWhale
+    // calendar — see services/events/georgetown/GeorgetownLiveWhaleProvider.ts).
+    // Deliberately NOT the submittedBy/request.auth.uid ownership model used
+    // everywhere else in this file: this isn't user-submitted content, it's
+    // a mirror of publicly-readable calendar data with no per-user author.
+    // Any signed-in client may refresh it — there's no Cloud Functions on
+    // the Spark plan to do that on a schedule server-side, so whichever
+    // client's app load finds the cache stale performs the refresh. Shape
+    // is checked, not attribution.
+    match /events/{eventId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.campusId is string
+        && request.resource.data.title is string
+        && request.resource.data.startAt is string
+        && request.resource.data.source is string;
+      allow delete: if false;
+    }
+
+    match /eventsCacheMeta/{campusId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.resource.data.source is string;
+      allow delete: if false;
+    }
   }
 }
