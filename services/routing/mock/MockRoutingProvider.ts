@@ -39,6 +39,8 @@ function toCandidate(path: LatLng[], hasDetectedSteps: boolean): ProviderRouteCa
     distanceMeters,
     durationSeconds: distanceMeters / WALKING_SPEED_MPS,
     hasDetectedSteps,
+    // Never claims a steep grade — this is a straight-line simulation with no elevation data.
+    hasDetectedSteepGrade: false,
   };
 }
 

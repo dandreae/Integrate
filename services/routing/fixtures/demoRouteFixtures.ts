@@ -172,7 +172,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 330,
       "durationSeconds": 237.197,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:03.790Z"
   },
@@ -329,7 +330,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 330,
       "durationSeconds": 237.197,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:04.242Z"
   },
@@ -642,7 +644,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 596,
       "durationSeconds": 430.632,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:04.394Z"
   },
@@ -955,7 +958,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 596,
       "durationSeconds": 430.632,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:04.549Z"
   },
@@ -1096,7 +1100,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 258,
       "durationSeconds": 180.002,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:04.699Z"
   },
@@ -1237,7 +1242,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 258,
       "durationSeconds": 180.002,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:04.851Z"
   },
@@ -1522,7 +1528,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 825,
       "durationSeconds": 612.343,
-      "hasDetectedSteps": true
+      "hasDetectedSteps": true,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:05.006Z"
   },
@@ -1795,7 +1802,8 @@ export const DEMO_ROUTE_FIXTURES: DemoRouteFixture[] = [
       ],
       "distanceMeters": 832,
       "durationSeconds": 642.209,
-      "hasDetectedSteps": false
+      "hasDetectedSteps": false,
+      "hasDetectedSteepGrade": false
     },
     "capturedAt": "2026-08-01T16:26:05.782Z"
   }

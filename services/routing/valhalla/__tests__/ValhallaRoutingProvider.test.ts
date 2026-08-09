@@ -66,6 +66,54 @@ describe("ValhallaRoutingProvider", () => {
     // First candidate's instructions don't mention steps; the alternate does.
     expect(candidates[0].hasDetectedSteps).toBe(false);
     expect(candidates[1].hasDetectedSteps).toBe(true);
+    expect(candidates[0].hasDetectedSteepGrade).toBe(false);
+  });
+
+  it("detects a steep grade from turn-by-turn instructions", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        trip: {
+          status: 0,
+          summary: { time: 200, length: 0.3 },
+          legs: [
+            {
+              shape: "cbveiA~oc_rCeAT{@X",
+              maneuvers: [{ instruction: "Continue up the steep hill." }],
+            },
+          ],
+        },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new ValhallaRoutingProvider();
+
+    const candidates = await provider.getWalkingRoute({
+      origin: { latitude: 38.90716, longitude: -77.07273 },
+      destination: { latitude: 38.91014, longitude: -77.07417 },
+    });
+
+    expect(candidates[0].hasDetectedSteepGrade).toBe(true);
+  });
+
+  it("biases pedestrian costing options based on accessibilityPreferences", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(SAMPLE_RESPONSE));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new ValhallaRoutingProvider();
+
+    await provider.getWalkingRoute({
+      origin: { latitude: 38.90716, longitude: -77.07273 },
+      destination: { latitude: 38.91014, longitude: -77.07417 },
+      accessibilityPreferences: {
+        avoidStairs: false,
+        avoidSteepSlopes: false,
+        requireElevator: false,
+        requireStepFreeEntrance: true,
+      },
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // requireStepFreeEntrance should bias step avoidance harder than a plain "avoid".
+    expect(body.costing_options.pedestrian.step_penalty).toBe(1800);
   });
 
   it("rejects invalid coordinates before making a request", async () => {

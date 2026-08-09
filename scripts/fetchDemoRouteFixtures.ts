@@ -68,8 +68,12 @@ async function fetchTrip(origin: DemoPair["origin"], destination: DemoPair["dest
 
   const coordinates = data.trip.legs.flatMap((leg: { shape: string }) => decodePolyline6(leg.shape));
   const stepPattern = /\bstep(s)?\b|\bstair(s)?\b/i;
+  const steepPattern = /\bsteep\b/i;
   const hasDetectedSteps = data.trip.legs.some((leg: { maneuvers?: { instruction?: string }[] }) =>
     (leg.maneuvers ?? []).some((m) => stepPattern.test(m.instruction ?? ""))
+  );
+  const hasDetectedSteepGrade = data.trip.legs.some((leg: { maneuvers?: { instruction?: string }[] }) =>
+    (leg.maneuvers ?? []).some((m) => steepPattern.test(m.instruction ?? ""))
   );
 
   return {
@@ -77,6 +81,7 @@ async function fetchTrip(origin: DemoPair["origin"], destination: DemoPair["dest
     distanceMeters: data.trip.summary.length * 1000,
     durationSeconds: data.trip.summary.time,
     hasDetectedSteps,
+    hasDetectedSteepGrade,
   };
 }
 

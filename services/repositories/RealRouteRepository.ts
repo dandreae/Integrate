@@ -1,6 +1,8 @@
 import type {
+  AccessibilityPreferences,
   AccessibilityReport,
   ConstructionZone,
+  ElevatorStatus,
   LatLng,
   Route,
   RouteOption,
@@ -59,14 +61,15 @@ function describeFailure(error: unknown): string {
 async function fetchEntranceCandidates(
   provider: RoutingProvider,
   origin: LatLng,
-  entranceCandidates: EntranceCandidate[]
+  entranceCandidates: EntranceCandidate[],
+  accessibilityPreferences?: AccessibilityPreferences
 ): Promise<Map<EntranceCandidate, ProviderRouteCandidate[]>> {
   const jobs = entranceCandidates.flatMap((ec) => [
     provider
-      .getWalkingRoute({ origin, destination: ec.point, preferAccessible: false })
+      .getWalkingRoute({ origin, destination: ec.point, preferAccessible: false, accessibilityPreferences })
       .then((candidates) => ({ ec, candidates })),
     provider
-      .getWalkingRoute({ origin, destination: ec.point, preferAccessible: true })
+      .getWalkingRoute({ origin, destination: ec.point, preferAccessible: true, accessibilityPreferences })
       .then((candidates) => ({ ec, candidates })),
   ]);
 
@@ -95,7 +98,9 @@ function pickBest(
   candidatesByEntrance: Map<EntranceCandidate, ProviderRouteCandidate[]>,
   constructionZones: ConstructionZone[],
   accessibilityReports: AccessibilityReport[],
-  destinationPlaceId: string | undefined
+  destinationPlaceId: string | undefined,
+  accessibilityPreferences: AccessibilityPreferences | undefined,
+  destinationElevatorStatus: ElevatorStatus | undefined
 ): Winner | null {
   let best: Winner | null = null;
   for (const entranceCandidate of entranceCandidates) {
@@ -108,6 +113,8 @@ function pickBest(
         constructionZones,
         accessibilityReports,
         destinationPlaceId,
+        accessibilityPreferences,
+        destinationElevatorStatus,
       });
       if (result.rejected) continue;
       if (!best || result.score < best.result.score) {
@@ -142,6 +149,28 @@ function buildReasons(preference: RoutePreference, winner: Winner, fastestWinner
     reasons.push("Avoids stairs");
   }
 
+  if (preference !== "fastest" && fastestWinner?.result.hasSteepSlope && !winner.result.hasSteepSlope) {
+    reasons.push("Avoids steep slopes");
+  } else if (winner.result.hasSteepSlope) {
+    reasons.push("Includes a steep slope");
+  }
+
+  if (winner.result.usedAutomaticDoor) {
+    reasons.push("Automatic door");
+  }
+
+  if (winner.result.usedCurbCut) {
+    reasons.push("Curb cut available");
+  }
+
+  if (winner.result.hasNarrowDoor) {
+    reasons.push("Entrance door narrower than ADA minimum");
+  }
+
+  if (winner.result.elevatorAvailable) {
+    reasons.push("Elevator available");
+  }
+
   if (
     preference !== "fastest" &&
     (fastestWinner?.result.nearbyConstructionZones.length ?? 0) > 0 &&
@@ -166,6 +195,59 @@ function buildReasons(preference: RoutePreference, winner: Winner, fastestWinner
   }
 
   return reasons;
+}
+
+function joinWithAnd(items: string[]): string {
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+/**
+ * Composes a single natural-language sentence explaining why this option
+ * looks the way it does relative to Fastest, e.g. "2 min slower, but avoids
+ * stairs and uses a verified accessible entrance." Only produced for
+ * non-fastest preferences that have a Fastest winner to compare against.
+ */
+function buildExplanation(preference: RoutePreference, winner: Winner, fastestWinner: Winner | null): string | undefined {
+  if (preference === "fastest" || !fastestWinner) return undefined;
+
+  const diffSeconds = winner.candidate.durationSeconds - fastestWinner.candidate.durationSeconds;
+  let timeClause: string;
+  if (diffSeconds > 30) {
+    timeClause = `${Math.round(diffSeconds / 60)} min slower`;
+  } else if (diffSeconds < -30) {
+    timeClause = `${Math.round(Math.abs(diffSeconds) / 60)} min faster`;
+  } else {
+    timeClause = "Same time as the fastest route";
+  }
+
+  const positives: string[] = [];
+  if (fastestWinner.result.hasStairs && !winner.result.hasStairs) positives.push("avoids stairs");
+  if (fastestWinner.result.hasSteepSlope && !winner.result.hasSteepSlope) positives.push("avoids steep slopes");
+  if (winner.result.usedAccessibleEntrance) {
+    positives.push(
+      winner.result.verifiedAccessibleEntrance ? "uses a verified accessible entrance" : "uses an accessible entrance"
+    );
+  }
+  if (winner.result.usedAutomaticDoor) positives.push("has an automatic door");
+  if (winner.result.usedCurbCut) positives.push("has a curb cut");
+  if (winner.result.elevatorAvailable && !fastestWinner.result.elevatorAvailable) positives.push("has a working elevator");
+  if (
+    (fastestWinner.result.nearbyConstructionZones.length ?? 0) > 0 &&
+    winner.result.nearbyConstructionZones.length === 0
+  ) {
+    positives.push("avoids construction");
+  }
+  if (
+    (fastestWinner.result.matchedAccessibilityReports.length ?? 0) > 0 &&
+    winner.result.matchedAccessibilityReports.length === 0
+  ) {
+    positives.push("avoids a reported accessibility issue");
+  }
+
+  if (positives.length === 0) return `${timeClause}.`;
+  return `${timeClause}, but ${joinWithAnd(positives)}.`;
 }
 
 function buildRoute(preference: RoutePreference, winner: Winner, source: Route["source"]): Route {
@@ -212,7 +294,8 @@ export class RealRouteRepository implements RouteRepository {
       request.origin,
       request.destination,
       constructionZones,
-      accessibilityReports
+      accessibilityReports,
+      request.accessibilityPreferences
     );
     const cached = getCachedRouteOptions(cacheKey);
     if (cached) return cached;
@@ -277,7 +360,12 @@ export class RealRouteRepository implements RouteRepository {
     let candidatesByEntrance: Map<EntranceCandidate, ProviderRouteCandidate[]>;
 
     try {
-      candidatesByEntrance = await fetchEntranceCandidates(this.realProvider, request.origin, canonical);
+      candidatesByEntrance = await fetchEntranceCandidates(
+        this.realProvider,
+        request.origin,
+        canonical,
+        request.accessibilityPreferences
+      );
     } catch (realError) {
       // eslint-disable-next-line no-console -- intentional: this is the only signal we get that live routing degraded.
       console.warn(
@@ -291,7 +379,12 @@ export class RealRouteRepository implements RouteRepository {
       } else {
         try {
           source = "mock";
-          candidatesByEntrance = await fetchEntranceCandidates(this.fallbackProvider, request.origin, canonical);
+          candidatesByEntrance = await fetchEntranceCandidates(
+            this.fallbackProvider,
+            request.origin,
+            canonical,
+            request.accessibilityPreferences
+          );
         } catch {
           const message = describeFailure(realError);
           return PREFERENCES.map((pref) => unavailableOption(pref, message));
@@ -309,7 +402,9 @@ export class RealRouteRepository implements RouteRepository {
           candidatesByEntrance,
           constructionZones,
           accessibilityReports,
-          request.destinationPlace?.id
+          request.destinationPlace?.id,
+          request.accessibilityPreferences,
+          request.destinationPlace?.elevatorStatus
         )
       );
     }
@@ -330,6 +425,7 @@ export class RealRouteRepository implements RouteRepository {
         label: PREFERENCE_LABELS[preference],
         route: buildRoute(preference, winner, source),
         reasons: buildReasons(preference, winner, fastestWinner),
+        explanation: buildExplanation(preference, winner, fastestWinner),
       };
     });
   }

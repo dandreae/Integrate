@@ -14,6 +14,7 @@ interface RouteSummaryBarProps {
   selectedPreference: RoutePreference;
   onSelectPreference: (preference: RoutePreference) => void;
   onClose: () => void;
+  onOpenAccessibilityPreferences: () => void;
 }
 
 const WARNING_SEVERITY_TONE: Record<string, string> = {
@@ -34,6 +35,7 @@ export function RouteSummaryBar({
   selectedPreference,
   onSelectPreference,
   onClose,
+  onOpenAccessibilityPreferences,
 }: RouteSummaryBarProps) {
   const selected = routeOptions.find((o) => o.preference === selectedPreference) ?? routeOptions[0];
   const selectedRoute = selected?.route ?? null;
@@ -51,6 +53,15 @@ export function RouteSummaryBar({
           <Text style={styles.title} numberOfLines={1}>
             {originName ? `Directions: ${originName} → ${destinationName}` : `Directions to ${destinationName}`}
           </Text>
+          <Pressable
+            onPress={onOpenAccessibilityPreferences}
+            accessibilityRole="button"
+            accessibilityLabel="Accessibility routing preferences"
+            hitSlop={8}
+            style={styles.closeButton}
+          >
+            <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
+          </Pressable>
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
@@ -115,10 +126,16 @@ export function RouteSummaryBar({
                 <Text style={styles.sourceBannerText}>{sourceLabel}</Text>
               </View>
             )}
-            {selected.reasons.length > 0 && (
+            {selected.explanation ? (
               <Text style={styles.reasonsText} numberOfLines={2}>
-                {selected.reasons.join(" · ")}
+                {selected.explanation}
               </Text>
+            ) : (
+              selected.reasons.length > 0 && (
+                <Text style={styles.reasonsText} numberOfLines={2}>
+                  {selected.reasons.join(" · ")}
+                </Text>
+              )
             )}
             {topWarning && (
               <View style={styles.warningRow}>

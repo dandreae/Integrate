@@ -13,6 +13,7 @@ function straightCandidate(overrides: Partial<ProviderRouteCandidate> = {}): Pro
     distanceMeters: 250,
     durationSeconds: 200,
     hasDetectedSteps: false,
+    hasDetectedSteepGrade: false,
     ...overrides,
   };
 }
@@ -266,5 +267,197 @@ describe("scoreCandidate", () => {
       destinationPlaceId: "dest-place",
     });
     expect(result.score).toBe(200);
+  });
+
+  describe("explicit accessibility preferences", () => {
+    it("avoidStairs adds a large flat penalty, even for fastest, without rejecting", () => {
+      const withoutToggle = scoreCandidate({
+        candidate: straightCandidate({ hasDetectedSteps: true }),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+      });
+      const withToggle = scoreCandidate({
+        candidate: straightCandidate({ hasDetectedSteps: true }),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: {
+          avoidStairs: true,
+          avoidSteepSlopes: false,
+          requireElevator: false,
+          requireStepFreeEntrance: false,
+        },
+      });
+      expect(withToggle.rejected).toBe(false);
+      expect(withToggle.score).toBeGreaterThan(withoutToggle.score);
+    });
+
+    it("avoidSteepSlopes adds a large flat penalty when the route or entrance ramp is steep", () => {
+      const flat = scoreCandidate({
+        candidate: straightCandidate({ hasDetectedSteepGrade: true }),
+        entranceCandidate: entranceCandidate(),
+        preference: "accessible",
+        constructionZones: [],
+      });
+      const steered = scoreCandidate({
+        candidate: straightCandidate({ hasDetectedSteepGrade: true }),
+        entranceCandidate: entranceCandidate(),
+        preference: "accessible",
+        constructionZones: [],
+        accessibilityPreferences: {
+          avoidStairs: false,
+          avoidSteepSlopes: true,
+          requireElevator: false,
+          requireStepFreeEntrance: false,
+        },
+      });
+      expect(steered.rejected).toBe(false);
+      expect(steered.score).toBeGreaterThan(flat.score);
+      expect(steered.hasSteepSlope).toBe(true);
+    });
+
+    it("requireStepFreeEntrance rejects an unknown or stair-having entrance, even for fastest", () => {
+      const preferences = {
+        avoidStairs: false,
+        avoidSteepSlopes: false,
+        requireElevator: false,
+        requireStepFreeEntrance: true,
+      };
+      const unknownEntrance = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: preferences,
+      });
+      const stairsEntrance = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate({
+          entrance: accessibleEntrance({ hasStairs: true }),
+          isKnownEntrance: true,
+        }),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: preferences,
+      });
+      expect(unknownEntrance.rejected).toBe(true);
+      expect(stairsEntrance.rejected).toBe(true);
+    });
+
+    it("requireStepFreeEntrance accepts a verified step-free accessible entrance", () => {
+      const result = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate({ entrance: accessibleEntrance(), isKnownEntrance: true }),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: {
+          avoidStairs: false,
+          avoidSteepSlopes: false,
+          requireElevator: false,
+          requireStepFreeEntrance: true,
+        },
+      });
+      expect(result.rejected).toBe(false);
+    });
+
+    it("requireElevator rejects when the destination's elevator isn't confirmed available", () => {
+      const preferences = {
+        avoidStairs: false,
+        avoidSteepSlopes: false,
+        requireElevator: true,
+        requireStepFreeEntrance: false,
+      };
+      const unknown = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: preferences,
+      });
+      const outOfService = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: preferences,
+        destinationElevatorStatus: "out-of-service",
+      });
+      const available = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate(),
+        preference: "fastest",
+        constructionZones: [],
+        accessibilityPreferences: preferences,
+        destinationElevatorStatus: "available",
+      });
+      expect(unknown.rejected).toBe(true);
+      expect(outOfService.rejected).toBe(true);
+      expect(available.rejected).toBe(false);
+    });
+  });
+
+  describe("granular entrance characteristics", () => {
+    it("rewards an automatic door and a curb cut with a lower score", () => {
+      const plain = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate({ entrance: accessibleEntrance(), isKnownEntrance: true }),
+        preference: "accessible",
+        constructionZones: [],
+      });
+      const enhanced = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate({
+          entrance: accessibleEntrance({ hasAutomaticDoor: true, hasCurbCut: true }),
+          isKnownEntrance: true,
+        }),
+        preference: "accessible",
+        constructionZones: [],
+      });
+      expect(enhanced.usedAutomaticDoor).toBe(true);
+      expect(enhanced.usedCurbCut).toBe(true);
+      expect(enhanced.score).toBeLessThan(plain.score);
+    });
+
+    it("penalizes and warns on a door narrower than the ADA minimum", () => {
+      const result = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate({
+          entrance: accessibleEntrance({ doorWidthInches: 24 }),
+          isKnownEntrance: true,
+        }),
+        preference: "accessible",
+        constructionZones: [],
+      });
+      expect(result.hasNarrowDoor).toBe(true);
+      expect(result.warnings.some((w) => w.type === "narrow-path")).toBe(true);
+    });
+
+    it("rejects a route to an entrance with a known temporary closure, for every preference", () => {
+      for (const preference of ["fastest", "accessible", "mostAccessible"] as const) {
+        const result = scoreCandidate({
+          candidate: straightCandidate(),
+          entranceCandidate: entranceCandidate({
+            entrance: accessibleEntrance({ temporaryClosure: { reason: "Door repair" } }),
+            isKnownEntrance: true,
+          }),
+          preference,
+          constructionZones: [],
+        });
+        expect(result.rejected).toBe(true);
+        expect(result.score).toBe(Number.POSITIVE_INFINITY);
+      }
+    });
+
+    it("warns when the destination's elevator is reported out of service, for non-fastest preferences", () => {
+      const result = scoreCandidate({
+        candidate: straightCandidate(),
+        entranceCandidate: entranceCandidate(),
+        preference: "accessible",
+        constructionZones: [],
+        destinationElevatorStatus: "out-of-service",
+      });
+      expect(result.warnings.some((w) => w.type === "elevator-dependent")).toBe(true);
+    });
   });
 });

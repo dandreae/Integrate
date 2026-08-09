@@ -1,7 +1,9 @@
 import type {
   AccessibilityConfidence,
+  AccessibilityPreferences,
   AccessibilityReport,
   ConstructionZone,
+  ElevatorStatus,
   RoutePreference,
   RouteWarning,
 } from "@/types";
@@ -20,6 +22,10 @@ export interface ScoreInput {
   accessibilityReports?: AccessibilityReport[];
   /** The destination place's id, if known — reports are matched against this, not the entrance alone, since most entrance data is still empty. */
   destinationPlaceId?: string;
+  /** Explicit user accessibility controls. Undefined means no explicit constraints beyond `preference`. */
+  accessibilityPreferences?: AccessibilityPreferences;
+  /** Elevator status of the destination place, when known — needed to evaluate `requireElevator`. */
+  destinationElevatorStatus?: ElevatorStatus;
 }
 
 export interface ScoreResult {
@@ -31,6 +37,11 @@ export interface ScoreResult {
   usedAccessibleEntrance: boolean;
   verifiedAccessibleEntrance: boolean;
   hasStairs: boolean;
+  hasSteepSlope: boolean;
+  usedAutomaticDoor: boolean;
+  usedCurbCut: boolean;
+  hasNarrowDoor: boolean;
+  elevatorAvailable: boolean;
   nearbyConstructionZones: ConstructionZone[];
   matchedAccessibilityReports: AccessibilityReport[];
 }
@@ -63,9 +74,12 @@ export function scoreCandidate({
   constructionZones,
   accessibilityReports = [],
   destinationPlaceId,
+  accessibilityPreferences,
+  destinationElevatorStatus,
 }: ScoreInput): ScoreResult {
   const s = ROUTING_CONFIG.scoring;
   const warnings: RouteWarning[] = [];
+  const entrance = entranceCandidate.entrance;
 
   const nearbyConstructionZones = constructionZones.filter((zone) =>
     pathNearZone(candidate.coordinates, zone, s.constructionBufferMeters)
@@ -78,6 +92,12 @@ export function scoreCandidate({
     if (report.entranceId && entranceCandidate.entrance?.id !== report.entranceId) return false;
     return true;
   });
+
+  const hasSteepSlope = Boolean(candidate.hasDetectedSteepGrade || entrance?.rampSlope === "steep");
+  const hasNarrowDoor = Boolean(
+    entrance?.doorWidthInches !== undefined && entrance.doorWidthInches < s.adaMinDoorWidthInches
+  );
+  const elevatorAvailable = destinationElevatorStatus === "available";
 
   const confirmedClosure = nearbyConstructionZones.find((zone) => zone.status === "confirmed-closure");
   if (confirmedClosure) {
@@ -97,6 +117,88 @@ export function scoreCandidate({
       usedAccessibleEntrance: false,
       verifiedAccessibleEntrance: false,
       hasStairs: candidate.hasDetectedSteps,
+      hasSteepSlope,
+      usedAutomaticDoor: false,
+      usedCurbCut: false,
+      hasNarrowDoor,
+      elevatorAvailable,
+      matchedAccessibilityReports,
+      nearbyConstructionZones,
+    };
+  }
+
+  if (entrance?.temporaryClosure) {
+    return {
+      score: Number.POSITIVE_INFINITY,
+      rejected: true,
+      rejectionReason: `${entrance.label} is temporarily closed: ${entrance.temporaryClosure.reason}.`,
+      warnings: [
+        {
+          type: "entrance-temporarily-closed",
+          label: `Closed: ${entrance.label}`,
+          severity: "high",
+          description: entrance.temporaryClosure.reason,
+        },
+      ],
+      accessibilityConfidence: "none",
+      usedAccessibleEntrance: false,
+      verifiedAccessibleEntrance: false,
+      hasStairs: candidate.hasDetectedSteps,
+      hasSteepSlope,
+      usedAutomaticDoor: false,
+      usedCurbCut: false,
+      hasNarrowDoor,
+      elevatorAvailable,
+      matchedAccessibilityReports,
+      nearbyConstructionZones,
+    };
+  }
+
+  // Hard constraints — a "require" toggle rejects any candidate that can't
+  // satisfy it outright, regardless of `preference`. Unlike "avoid" toggles
+  // (steered away from via penalties below), these never win as a fallback.
+  if (accessibilityPreferences?.requireStepFreeEntrance) {
+    const stepFree =
+      entranceCandidate.isKnownEntrance &&
+      Boolean(entrance?.isAccessible) &&
+      !entrance?.hasStairs &&
+      !candidate.hasDetectedSteps;
+    if (!stepFree) {
+      return {
+        score: Number.POSITIVE_INFINITY,
+        rejected: true,
+        rejectionReason: "This route does not use a verified step-free entrance.",
+        warnings: [],
+        accessibilityConfidence: "none",
+        usedAccessibleEntrance: false,
+        verifiedAccessibleEntrance: false,
+        hasStairs: candidate.hasDetectedSteps,
+        hasSteepSlope,
+        usedAutomaticDoor: false,
+        usedCurbCut: false,
+        hasNarrowDoor,
+        elevatorAvailable,
+        matchedAccessibilityReports,
+        nearbyConstructionZones,
+      };
+    }
+  }
+
+  if (accessibilityPreferences?.requireElevator && !elevatorAvailable) {
+    return {
+      score: Number.POSITIVE_INFINITY,
+      rejected: true,
+      rejectionReason: "No working elevator is confirmed at this destination.",
+      warnings: [],
+      accessibilityConfidence: "none",
+      usedAccessibleEntrance: false,
+      verifiedAccessibleEntrance: false,
+      hasStairs: candidate.hasDetectedSteps,
+      hasSteepSlope,
+      usedAutomaticDoor: false,
+      usedCurbCut: false,
+      hasNarrowDoor,
+      elevatorAvailable,
       matchedAccessibilityReports,
       nearbyConstructionZones,
     };
@@ -114,9 +216,27 @@ export function scoreCandidate({
       description: "This route's walking directions include steps or stairs.",
     });
   }
+  if (accessibilityPreferences?.avoidStairs && (candidate.hasDetectedSteps || entrance?.hasStairs)) {
+    score += s.explicitAvoidPenaltySeconds;
+  }
+
+  // Steep slopes/grades
+  if (hasSteepSlope) {
+    score += s.steepSlopePenaltySeconds[preference];
+    if (preference !== "fastest") {
+      warnings.push({
+        type: "steep-incline",
+        label: "Steep slope on this route",
+        severity: "caution",
+        description: "This route includes a steep grade or ramp.",
+      });
+    }
+  }
+  if (accessibilityPreferences?.avoidSteepSlopes && hasSteepSlope) {
+    score += s.explicitAvoidPenaltySeconds;
+  }
 
   // Entrance accessibility
-  const entrance = entranceCandidate.entrance;
   const usedAccessibleEntrance = Boolean(entrance?.isAccessible);
   const verifiedAccessibleEntrance =
     usedAccessibleEntrance && isVerifiedRecently(entrance?.accessibilityVerifiedAt, s.verifiedRecencyDays);
@@ -138,6 +258,38 @@ export function scoreCandidate({
     if (verifiedAccessibleEntrance) {
       score -= s.verifiedAccessibilityBonusSeconds[preference];
     }
+  }
+
+  // Door / entryway characteristics
+  const usedAutomaticDoor = Boolean(entrance?.hasAutomaticDoor);
+  if (usedAutomaticDoor) {
+    score -= s.automaticDoorBonusSeconds[preference];
+  }
+  const usedCurbCut = Boolean(entrance?.hasCurbCut);
+  if (usedCurbCut) {
+    score -= s.curbCutBonusSeconds[preference];
+  }
+  if (hasNarrowDoor) {
+    score += s.narrowDoorPenaltySeconds[preference];
+    if (preference !== "fastest") {
+      warnings.push({
+        type: "narrow-path",
+        label: "Narrow entrance door",
+        severity: "caution",
+        description: `${entrance?.label ?? "This entrance"}'s door is narrower than the ADA minimum clear width.`,
+      });
+    }
+  }
+
+  // Elevator dependency
+  if (destinationElevatorStatus === "out-of-service" && preference !== "fastest") {
+    score += s.accessibilityReportPenaltySeconds[preference];
+    warnings.push({
+      type: "elevator-dependent",
+      label: "Elevator reported out of service",
+      severity: "high",
+      description: "This destination's elevator is currently reported out of service.",
+    });
   }
 
   // Accessibility confidence + uncertainty penalty
@@ -193,6 +345,11 @@ export function scoreCandidate({
     usedAccessibleEntrance,
     verifiedAccessibleEntrance,
     hasStairs: candidate.hasDetectedSteps,
+    hasSteepSlope,
+    usedAutomaticDoor,
+    usedCurbCut,
+    hasNarrowDoor,
+    elevatorAvailable,
     nearbyConstructionZones,
   };
 }

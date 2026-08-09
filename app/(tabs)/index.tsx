@@ -24,6 +24,7 @@ import { SearchResultsList } from "@/features/map/SearchResultsList";
 import { UserProfileSheet } from "@/features/map/UserProfileSheet";
 import { PlacePreviewCard } from "@/features/places/PlacePreviewCard";
 import { RouteSummaryBar } from "@/features/routing/RouteSummaryBar";
+import { AccessibilityPreferencesSheet } from "@/features/routing/AccessibilityPreferencesSheet";
 import { haversineDistanceMeters } from "@/features/routing/geo";
 import { ProposeEditSheet } from "@/features/edits/ProposeEditSheet";
 import { ConstructionZoneFormSheet } from "@/features/edits/ConstructionZoneFormSheet";
@@ -68,6 +69,8 @@ const DEFAULT_FILTERS: MapFilterState = {
 export default function MapScreen() {
   const selectedCampusId = useAppStore((state) => state.selectedCampusId);
   const prefersAccessibleRouting = useAppStore((state) => state.prefersAccessibleRouting);
+  const accessibilityPreferences = useAppStore((state) => state.accessibilityPreferences);
+  const setAccessibilityPreferences = useAppStore((state) => state.setAccessibilityPreferences);
   const uid = useUserStore((state) => state.uid);
   const visibleToFriends = useFriendsStore((state) => state.visibleToFriends);
   const mapRef = useRef<MapView>(null);
@@ -105,8 +108,11 @@ export default function MapScreen() {
   const [routeDestination, setRouteDestination] = useState<Place | null>(null);
   /** Name of the chosen origin place, when routing building-to-building instead of from the user's location. */
   const [routeOriginName, setRouteOriginName] = useState<string | null>(null);
+  /** Origin of the last computed route, kept so accessibility preference changes can re-run it in place. */
+  const [lastRouteOrigin, setLastRouteOrigin] = useState<{ point: LatLng; place?: Place } | null>(null);
   const [isRouting, setIsRouting] = useState(false);
   const [isResolvingTap, setIsResolvingTap] = useState(false);
+  const [accessibilityPreferencesSheetVisible, setAccessibilityPreferencesSheetVisible] = useState(false);
 
   const activeRoute =
     routeOptions?.find((option) => option.preference === selectedRoutePreference)?.route ?? null;
@@ -375,11 +381,14 @@ export default function MapScreen() {
   }
 
   const computeAndShowRoute = useCallback(
-    async (origin: LatLng, destination: Place, originPlace?: Place) => {
+    async (origin: LatLng, destination: Place, originPlace?: Place, preserveSelectedPreference = false) => {
       setSelectedPlace(null);
       setRouteDestination(destination);
       setRouteOriginName(originPlace?.officialName ?? null);
-      setSelectedRoutePreference(prefersAccessibleRouting ? "accessible" : "fastest");
+      setLastRouteOrigin({ point: origin, place: originPlace });
+      if (!preserveSelectedPreference) {
+        setSelectedRoutePreference(prefersAccessibleRouting ? "accessible" : "fastest");
+      }
       setIsRouting(true);
 
       try {
@@ -390,12 +399,16 @@ export default function MapScreen() {
           originPlace,
           constructionZones,
           accessibilityReports,
+          accessibilityPreferences,
         });
         setRouteOptions(options);
 
-        const preferred = options.find(
-          (o) => o.preference === (prefersAccessibleRouting ? "accessible" : "fastest")
-        );
+        const desiredPreference = preserveSelectedPreference
+          ? selectedRoutePreference
+          : prefersAccessibleRouting
+            ? "accessible"
+            : "fastest";
+        const preferred = options.find((o) => o.preference === desiredPreference);
         const firstAvailable = options.find((o) => o.route);
         const toShow = preferred?.route ? preferred : firstAvailable;
         if (toShow?.route) {
@@ -409,7 +422,7 @@ export default function MapScreen() {
         setIsRouting(false);
       }
     },
-    [prefersAccessibleRouting, constructionZones, accessibilityReports]
+    [prefersAccessibleRouting, constructionZones, accessibilityReports, accessibilityPreferences, selectedRoutePreference]
   );
 
   const handleDirections = useCallback(
@@ -450,6 +463,14 @@ export default function MapScreen() {
     setRouteOptions(null);
     setRouteDestination(null);
     setRouteOriginName(null);
+    setLastRouteOrigin(null);
+  }
+
+  function handleCloseAccessibilityPreferences() {
+    setAccessibilityPreferencesSheetVisible(false);
+    if (lastRouteOrigin && routeDestination) {
+      computeAndShowRoute(lastRouteOrigin.point, routeDestination, lastRouteOrigin.place, true);
+    }
   }
 
   async function handleLocatePress() {
@@ -731,8 +752,16 @@ export default function MapScreen() {
           selectedPreference={selectedRoutePreference}
           onSelectPreference={handleSelectRoutePreference}
           onClose={handleClearRoute}
+          onOpenAccessibilityPreferences={() => setAccessibilityPreferencesSheetVisible(true)}
         />
       )}
+
+      <AccessibilityPreferencesSheet
+        visible={accessibilityPreferencesSheetVisible}
+        preferences={accessibilityPreferences}
+        onChange={setAccessibilityPreferences}
+        onClose={handleCloseAccessibilityPreferences}
+      />
 
       <MapFilterSheet
         visible={filterSheetVisible}

@@ -1,4 +1,4 @@
-import type { AccessibilityReport, ConstructionZone, LatLng, RouteOption } from "@/types";
+import type { AccessibilityPreferences, AccessibilityReport, ConstructionZone, LatLng, RouteOption } from "@/types";
 
 /** Lightweight in-memory session cache. No persistence, no TTL. */
 const cache = new Map<string, RouteOption[]>();
@@ -12,7 +12,8 @@ export function buildRouteCacheKey(
   origin: LatLng,
   destination: LatLng,
   constructionZones: ConstructionZone[],
-  accessibilityReports: AccessibilityReport[] = []
+  accessibilityReports: AccessibilityReport[] = [],
+  accessibilityPreferences?: AccessibilityPreferences
 ): string {
   const zoneFingerprint = constructionZones
     .map((z) => `${z.id}:${z.status ?? "reported"}`)
@@ -22,6 +23,14 @@ export function buildRouteCacheKey(
     .map((r) => `${r.id}:${r.status}:${r.confirmCount}`)
     .sort()
     .join(",");
+  const preferencesFingerprint = accessibilityPreferences
+    ? [
+        accessibilityPreferences.avoidStairs,
+        accessibilityPreferences.avoidSteepSlopes,
+        accessibilityPreferences.requireElevator,
+        accessibilityPreferences.requireStepFreeEntrance,
+      ].join(",")
+    : "";
   return [
     roundCoord(origin.latitude),
     roundCoord(origin.longitude),
@@ -29,6 +38,7 @@ export function buildRouteCacheKey(
     roundCoord(destination.longitude),
     zoneFingerprint,
     reportFingerprint,
+    preferencesFingerprint,
   ].join("|");
 }
 

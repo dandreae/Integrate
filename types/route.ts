@@ -11,6 +11,7 @@ export type RouteWarningType =
   | "elevator-dependent"
   | "narrow-path"
   | "entrance-closed"
+  | "entrance-temporarily-closed"
   | "accessibility-unverified"
   | "accessibility-report";
 
@@ -31,6 +32,26 @@ export interface RouteWarning {
  */
 export type AccessibilityConfidence = "verified" | "unverified" | "none";
 
+/**
+ * Explicit, user-set accessibility controls — independent of `RoutePreference`.
+ * "Avoid" toggles steer scoring away from the trait with a heavy penalty but
+ * will still return a route if it's the only option. "Require" toggles are
+ * hard constraints: a candidate that can't satisfy them is rejected outright.
+ */
+export interface AccessibilityPreferences {
+  avoidStairs: boolean;
+  avoidSteepSlopes: boolean;
+  requireElevator: boolean;
+  requireStepFreeEntrance: boolean;
+}
+
+export const DEFAULT_ACCESSIBILITY_PREFERENCES: AccessibilityPreferences = {
+  avoidStairs: false,
+  avoidSteepSlopes: false,
+  requireElevator: false,
+  requireStepFreeEntrance: false,
+};
+
 export interface RouteRequest {
   origin: LatLng;
   destination: LatLng;
@@ -42,6 +63,8 @@ export interface RouteRequest {
   constructionZones?: ConstructionZone[];
   /** Active/resolved accessibility reports (elevator outages, blocked ramps, etc.), used for penalty/rejection scoring. */
   accessibilityReports?: AccessibilityReport[];
+  /** Explicit user accessibility controls (avoid stairs, require elevator, etc.). */
+  accessibilityPreferences?: AccessibilityPreferences;
 }
 
 export interface Route {
@@ -67,4 +90,6 @@ export interface RouteOption {
   unavailableReason?: string;
   /** Short human-readable bullets explaining why this option looks the way it does, e.g. "2 min faster", "Uses accessible entrance". */
   reasons: string[];
+  /** `reasons` composed into one natural-language sentence, e.g. "2 min slower, but avoids stairs and uses a verified accessible entrance." */
+  explanation?: string;
 }

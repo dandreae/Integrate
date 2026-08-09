@@ -119,5 +119,44 @@ export const ROUTING_CONFIG = {
       accessible: 600,
       mostAccessible: 1800,
     } satisfies Record<RoutePreference, number>,
+
+    /** Added when the entrance's ramp is marked steep, or the route itself has a detected steep grade. */
+    steepSlopePenaltySeconds: {
+      fastest: 0,
+      accessible: 240,
+      mostAccessible: 900,
+    } satisfies Record<RoutePreference, number>,
+
+    /** Subtracted (bonus) when the entrance used has an automatic door. */
+    automaticDoorBonusSeconds: {
+      fastest: 0,
+      accessible: 30,
+      mostAccessible: 60,
+    } satisfies Record<RoutePreference, number>,
+
+    /** Subtracted (bonus) when the entrance used has a curb cut. */
+    curbCutBonusSeconds: {
+      fastest: 0,
+      accessible: 30,
+      mostAccessible: 60,
+    } satisfies Record<RoutePreference, number>,
+
+    /** Added when the entrance's clear door width is known and below `adaMinDoorWidthInches`. */
+    narrowDoorPenaltySeconds: {
+      fastest: 0,
+      accessible: 150,
+      mostAccessible: 400,
+    } satisfies Record<RoutePreference, number>,
+
+    /** ADA minimum clear door width, in inches — below this a door is flagged as too narrow for most wheelchairs. */
+    adaMinDoorWidthInches: 32,
+
+    /**
+     * Flat (not preference-scaled) penalty applied when an explicit "avoid"
+     * toggle (`AccessibilityPreferences.avoidStairs` / `avoidSteepSlopes`) is
+     * violated. Large enough that a matching candidate only wins if it's the
+     * only feasible option — unlike "require" toggles, "avoid" never hard-rejects.
+     */
+    explicitAvoidPenaltySeconds: 3600,
   },
 } as const;

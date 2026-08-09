@@ -31,6 +31,7 @@ interface ValhallaResponse {
 }
 
 const STEP_INSTRUCTION_PATTERN = /\bstep(s)?\b|\bstair(s)?\b/i;
+const STEEP_INSTRUCTION_PATTERN = /\bsteep\b/i;
 
 function isValidLatLng(point: LatLng): boolean {
   return (
@@ -50,12 +51,20 @@ function tripToCandidate(trip: ValhallaTrip): ProviderRouteCandidate {
         STEP_INSTRUCTION_PATTERN.test(m.verbal_pre_transition_instruction ?? "")
     )
   );
+  const hasDetectedSteepGrade = trip.legs.some((leg) =>
+    (leg.maneuvers ?? []).some(
+      (m) =>
+        STEEP_INSTRUCTION_PATTERN.test(m.instruction ?? "") ||
+        STEEP_INSTRUCTION_PATTERN.test(m.verbal_pre_transition_instruction ?? "")
+    )
+  );
 
   return {
     coordinates,
     distanceMeters: trip.summary.length * 1000,
     durationSeconds: trip.summary.time,
     hasDetectedSteps,
+    hasDetectedSteepGrade,
   };
 }
 
@@ -92,6 +101,15 @@ export class ValhallaRoutingProvider implements RoutingProvider {
   }
 
   private async requestOnce(query: WalkingRouteQuery): Promise<ProviderRouteCandidate[]> {
+    const prefs = query.accessibilityPreferences;
+    // "Require" toggles bias the graph search harder than a plain "avoid" —
+    // they still don't guarantee the property (Valhalla has no step-free
+    // constraint), so RouteCandidateScorer still enforces them as hard
+    // rejections downstream. This just makes the requested geometry more
+    // likely to already satisfy them.
+    const wantsStepAvoidance = query.preferAccessible || prefs?.avoidStairs || prefs?.requireStepFreeEntrance;
+    const wantsSlopeAvoidance = query.preferAccessible || prefs?.avoidSteepSlopes;
+
     const body = {
       locations: [
         { lat: query.origin.latitude, lon: query.origin.longitude },
@@ -100,14 +118,12 @@ export class ValhallaRoutingProvider implements RoutingProvider {
       costing: "pedestrian",
       alternates: ROUTING_CONFIG.provider.alternates,
       costing_options: {
-        pedestrian: query.preferAccessible
-          ? {
-              // Strongly discourage stairs and steep grades at the graph-search
-              // level, on top of the post-hoc scoring in RouteCandidateScorer.
-              step_penalty: 720,
-              use_hills: 0.1,
-            }
-          : {},
+        pedestrian: {
+          ...(wantsStepAvoidance
+            ? { step_penalty: prefs?.requireStepFreeEntrance ? 1800 : 720 }
+            : {}),
+          ...(wantsSlopeAvoidance ? { use_hills: prefs?.avoidSteepSlopes ? 0.05 : 0.1 } : {}),
+        },
       },
     };
 

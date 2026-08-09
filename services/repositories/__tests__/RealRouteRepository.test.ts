@@ -13,6 +13,7 @@ function candidate(overrides: Partial<ProviderRouteCandidate> = {}): ProviderRou
     distanceMeters: 250,
     durationSeconds: 200,
     hasDetectedSteps: false,
+    hasDetectedSteepGrade: false,
     ...overrides,
   };
 }
@@ -75,6 +76,7 @@ describe("RealRouteRepository", () => {
     expect(fastest.route?.warnings.some((w) => w.type === "stairs")).toBe(true);
     expect(mostAccessible.route?.warnings.some((w) => w.type === "stairs")).toBe(false);
     expect(mostAccessible.reasons).toContain("Avoids stairs");
+    expect(mostAccessible.explanation).toMatch(/slower, but avoids stairs/);
   });
 
   it("accessible preference only considers accessible entrances when one exists", async () => {
@@ -163,5 +165,98 @@ describe("RealRouteRepository", () => {
     await repo.getRouteOptions({ origin: ORIGIN, destination: DESTINATION });
 
     expect(provider.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("does not reuse the cache across different accessibility preferences", async () => {
+    const provider = new StubProvider(() => [candidate()]);
+    const repo = new RealRouteRepository(provider, new FailingProvider());
+
+    await repo.getRouteOptions({ origin: ORIGIN, destination: DESTINATION });
+    const callsAfterFirst = provider.calls.length;
+    await repo.getRouteOptions({
+      origin: ORIGIN,
+      destination: DESTINATION,
+      accessibilityPreferences: {
+        avoidStairs: true,
+        avoidSteepSlopes: false,
+        requireElevator: false,
+        requireStepFreeEntrance: false,
+      },
+    });
+
+    expect(provider.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+
+  it("forwards accessibilityPreferences to the routing provider", async () => {
+    const provider = new StubProvider(() => [candidate()]);
+    const repo = new RealRouteRepository(provider, new FailingProvider());
+    const preferences = {
+      avoidStairs: true,
+      avoidSteepSlopes: true,
+      requireElevator: false,
+      requireStepFreeEntrance: false,
+    };
+
+    await repo.getRouteOptions({ origin: ORIGIN, destination: DESTINATION, accessibilityPreferences: preferences });
+
+    expect(provider.calls.length).toBeGreaterThan(0);
+    for (const call of provider.calls) {
+      expect(call.accessibilityPreferences).toEqual(preferences);
+    }
+  });
+
+  it("rejects every preference when requireStepFreeEntrance can't be verified for the destination", async () => {
+    const provider = new StubProvider(() => [candidate()]);
+    const repo = new RealRouteRepository(provider, new FailingProvider());
+
+    const options = await repo.getRouteOptions({
+      origin: ORIGIN,
+      destination: DESTINATION,
+      accessibilityPreferences: {
+        avoidStairs: false,
+        avoidSteepSlopes: false,
+        requireElevator: false,
+        requireStepFreeEntrance: true,
+      },
+    });
+
+    for (const option of options) {
+      expect(option.route).toBeNull();
+    }
+  });
+
+  it("requireElevator succeeds once the destination place reports an available elevator", async () => {
+    const provider = new StubProvider(() => [candidate()]);
+    const repo = new RealRouteRepository(provider, new FailingProvider());
+    const destinationPlace = place({ elevatorStatus: "available" });
+    const preferences = {
+      avoidStairs: false,
+      avoidSteepSlopes: false,
+      requireElevator: true,
+      requireStepFreeEntrance: false,
+    };
+
+    const blocked = await repo.getRouteOptions({
+      origin: ORIGIN,
+      destination: DESTINATION,
+      destinationPlace: place({ elevatorStatus: "out-of-service" }),
+      accessibilityPreferences: preferences,
+    });
+    // Same origin/destination/preferences as `blocked` above — the route
+    // cache key doesn't fingerprint `destinationPlace` (pre-existing, same
+    // gap as entrance accessibility data), so clear it or this would return
+    // the stale rejected result instead of actually re-scoring.
+    clearRouteCache();
+    const allowed = await repo.getRouteOptions({
+      origin: ORIGIN,
+      destination: DESTINATION,
+      destinationPlace,
+      accessibilityPreferences: preferences,
+    });
+
+    for (const option of blocked) {
+      expect(option.route).toBeNull();
+    }
+    expect(allowed.find((o) => o.preference === "fastest")?.route).not.toBeNull();
   });
 });
