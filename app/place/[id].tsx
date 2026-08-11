@@ -314,6 +314,7 @@ export default function PlaceDetailScreen() {
         title={`Directions to ${place.officialName} from...`}
         places={campusPlaces}
         excludePlaceId={place.id}
+        campusId={place.campusId}
         onClose={() => setOriginPickerVisible(false)}
         onSelect={handleDirectionsFrom}
       />

@@ -275,6 +275,7 @@ export function PlacePreviewCard({
         title={`Directions to ${place.officialName} from...`}
         places={places}
         excludePlaceId={place.id}
+        campusId={place.campusId}
         onClose={() => setOriginPickerVisible(false)}
         onSelect={(origin) => {
           setOriginPickerVisible(false);

@@ -41,13 +41,13 @@ export function ChooseOriginSheet({
         <Pressable
           onPress={onChooseStartingPoint}
           accessibilityRole="button"
-          accessibilityLabel="Choose a starting point"
+          accessibilityLabel="Search for a starting point"
           style={styles.option}
         >
           <View style={[styles.optionIcon, { backgroundColor: colors.surfaceMuted }]}>
             <Ionicons name="search" size={18} color={colors.textPrimary} />
           </View>
-          <Text style={styles.optionLabel}>Choose starting point...</Text>
+          <Text style={styles.optionLabel}>Search for a place...</Text>
         </Pressable>
 
         <Pressable

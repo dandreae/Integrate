@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, SectionList, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Place } from "@/types";
 import { PLACE_CATEGORY_META } from "@/constants/categories";
 import { colors, radii, shadow, spacing, touchTarget, typography } from "@/constants/theme";
+import { useExternalPlaceSearch } from "@/hooks/useExternalPlaceSearch";
 
 interface PlacePickerSheetProps {
   visible: boolean;
@@ -12,8 +13,20 @@ interface PlacePickerSheetProps {
   places: Place[];
   /** Excluded from the list — typically the destination, so you can't route to itself. */
   excludePlaceId?: string;
+  /**
+   * When provided, search also includes real buildings from the live
+   * map/geocoding service (not just Integrate's curated places) — the same
+   * results the main map's search bar would show. Omit to keep this picker
+   * scoped to curated places only.
+   */
+  campusId?: string;
   onSelect: (place: Place) => void;
   onClose: () => void;
+}
+
+interface PickerSection {
+  title: string;
+  data: Place[];
 }
 
 export function PlacePickerSheet({
@@ -21,12 +34,18 @@ export function PlacePickerSheet({
   title,
   places,
   excludePlaceId,
+  campusId,
   onSelect,
   onClose,
 }: PlacePickerSheetProps) {
   const [query, setQuery] = useState("");
 
-  const results = useMemo(() => {
+  // Safe no-op when campusId isn't provided: CampusRepository won't resolve
+  // an empty id, so the underlying search effect bails out before ever
+  // making a network call — no need to conditionally call the hook.
+  const { externalResults, isSearching } = useExternalPlaceSearch(campusId ?? "", query, places);
+
+  const curatedResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     return places
       .filter((place) => place.id !== excludePlaceId)
@@ -37,6 +56,16 @@ export function PlacePickerSheet({
         );
       });
   }, [places, excludePlaceId, query]);
+
+  const sections = useMemo((): PickerSection[] => {
+    const result: PickerSection[] = [{ title: "", data: curatedResults }];
+    if (campusId && (externalResults.length > 0 || isSearching)) {
+      result.push({ title: "From the map", data: externalResults });
+    }
+    return result;
+  }, [curatedResults, externalResults, isSearching, campusId]);
+
+  const isEmpty = curatedResults.length === 0 && externalResults.length === 0 && !isSearching;
 
   function handleSelect(place: Place) {
     setQuery("");
@@ -80,12 +109,21 @@ export function PlacePickerSheet({
           />
         </View>
 
-        <FlatList
-          data={results}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           style={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No places match "{query}"</Text>}
+          stickySectionHeadersEnabled={false}
+          ListEmptyComponent={isEmpty ? <Text style={styles.emptyText}>No places match "{query}"</Text> : null}
+          renderSectionHeader={({ section }) =>
+            section.title ? (
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                {isSearching && <ActivityIndicator size="small" color={colors.textSecondary} />}
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => {
             const meta = PLACE_CATEGORY_META[item.category];
             return (
@@ -173,6 +211,18 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  sectionHeaderText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
   },
   row: {
     flexDirection: "row",

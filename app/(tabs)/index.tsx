@@ -42,7 +42,6 @@ import {
   routeRepository,
 } from "@/services/repositories";
 import {
-  expandNicknameAlias,
   fetchNearbyNamedFeatures,
   geocodingProvider,
   looksLikeAbbreviation,
@@ -61,6 +60,7 @@ import { useDirectionsStore } from "@/store/useDirectionsStore";
 import { useFriendsStore } from "@/store/useFriendsStore";
 import { useUserStore } from "@/store/useUserStore";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
+import { useExternalPlaceSearch } from "@/hooks/useExternalPlaceSearch";
 import { usePlaceOverrides } from "@/hooks/usePlaceOverrides";
 import { useApprovedConstructionZones } from "@/hooks/useApprovedConstructionZones";
 import { usePendingProposals } from "@/hooks/usePendingProposals";
@@ -100,8 +100,6 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [externalSearchResults, setExternalSearchResults] = useState<Place[]>([]);
-  const [isSearchingExternal, setIsSearchingExternal] = useState(false);
   const [possibleAbbreviationMatches, setPossibleAbbreviationMatches] = useState<Place[]>([]);
   /** Every named building/amenity on campus, from live map data — the pool the abbreviation guesser checks against. Best-effort, fetched once. */
   const [nearbyFeatures, setNearbyFeatures] = useState<GeocodeResult[]>([]);
@@ -166,6 +164,12 @@ export default function MapScreen() {
     [places, placeOverrides]
   );
 
+  const { externalResults: externalSearchResults, isSearching: isSearchingExternal } = useExternalPlaceSearch(
+    selectedCampusId,
+    searchQuery,
+    overriddenPlaces
+  );
+
   const filteredPlaces = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return overriddenPlaces.filter((place) => {
@@ -179,25 +183,13 @@ export default function MapScreen() {
     });
   }, [overriddenPlaces, filters.categories, searchQuery]);
 
-  // Search results beyond Integrate's curated places (e.g. "Copley Hall"),
-  // resolved via the map/geocoding service so users aren't limited to the
-  // handful of buildings we've manually added. Debounced + request-order
-  // guarded so a fast typist doesn't get a stale result flash in late.
-  //
-  // Deliberately biased to the CAMPUS center, not `userLocation` — a device
-  // location simulator (or a student a few blocks off campus) can put
-  // userLocation far enough away that every real on-campus match gets
-  // discarded by the geocoder's own proximity relevance/distance filtering,
-  // silently returning zero results with no error to show for it. This bit
-  // us for real: the iOS Simulator here defaults to Cupertino, CA, ~3,800km
-  // from Georgetown, which is exactly what was causing "Yates" to come up
-  // empty. See the identical fix for routing coverage for the same reasoning.
+  // Abbreviation guessing (e.g. "ICC") is local/instant — checked against
+  // the pre-fetched nearby-features pool, no network call. The rest of
+  // "search beyond Integrate's curated places" (e.g. "Copley Hall") is
+  // handled by useExternalPlaceSearch above, which does the debounced,
+  // campus-biased geocoding lookup.
   useEffect(() => {
     const query = searchQuery.trim();
-
-    // Abbreviation guessing is local/instant (checked against the
-    // pre-fetched nearby-features pool) — no reason to gate it behind the
-    // same length/debounce as the network geocoding search below.
     if (query.length >= 2 && looksLikeAbbreviation(query)) {
       const curatedNames = new Set(overriddenPlaces.map((p) => p.officialName.toLowerCase()));
       const guesses = nearbyFeatures
@@ -207,49 +199,7 @@ export default function MapScreen() {
     } else {
       setPossibleAbbreviationMatches([]);
     }
-
-    if (query.length < 3 || !campus) {
-      setExternalSearchResults([]);
-      setIsSearchingExternal(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsSearchingExternal(true);
-    const near = { latitude: campus.latitude, longitude: campus.longitude };
-    // A known nickname (e.g. "ICC") gets searched under its real name too —
-    // the alias only ever rewrites search TEXT, the coordinate that comes
-    // back is always a live lookup, never a stored/guessed location.
-    const alias = expandNicknameAlias(query);
-    const timeout = setTimeout(async () => {
-      const [directResults, aliasResults] = await Promise.all([
-        geocodingProvider.search(query, near),
-        alias ? geocodingProvider.search(alias, near) : Promise.resolve([]),
-      ]);
-      if (cancelled) return;
-
-      const curatedNames = new Set(
-        overriddenPlaces.map((p) => p.officialName.toLowerCase())
-      );
-      const seen = new Set<string>();
-      const synthetic = [...directResults, ...aliasResults]
-        .filter((r) => {
-          const key = r.name.toLowerCase();
-          if (curatedNames.has(key) || seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-        .map((r) => toSyntheticPlace(r, selectedCampusId));
-
-      setExternalSearchResults(synthetic);
-      setIsSearchingExternal(false);
-    }, 400);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [searchQuery, campus, overriddenPlaces, selectedCampusId, nearbyFeatures]);
+  }, [searchQuery, overriddenPlaces, selectedCampusId, nearbyFeatures]);
 
   // Don't show the same building twice if it's both a confirmed map match
   // and coincidentally initials-matches the query.
