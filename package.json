@@ -8,6 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "web:export": "expo export --platform web && node scripts/fixVercelWebAssets.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
