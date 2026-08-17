@@ -1,15 +1,23 @@
 import type { CampusEvent } from "@/types";
 import { DEFAULT_CAMPUS_ID } from "./campuses";
+import { daysFromNow, isoDatePart } from "./relativeTime";
 
 /**
  * Curated demo events — used by MockEventRepository (default/offline mode)
  * and as RealEventRepository's last-resort fallback if the live Georgetown
- * feed and the Firestore cache are both unavailable. `startAt`/`date` are
- * kept a bit in the future on purpose; update these if they've drifted into
- * the past. `coordinate`/`locationConfidence` are intentionally left unset
- * here — services/events/eventLocationResolver.ts fills them in from
- * `locationId` uniformly for seed and live events alike.
+ * feed and the Firestore cache are both unavailable. Dates are computed
+ * relative to whenever this module loads (see data/relativeTime.ts) rather
+ * than hardcoded, so this never drifts into the past and never needs
+ * manual "refreshing" — the day offsets below (0, 1, 2, ...) are what
+ * actually encode the demo's timeline. `coordinate`/`locationConfidence`
+ * are intentionally left unset here — services/events/eventLocationResolver.ts
+ * fills them in from `locationId` uniformly for seed and live events alike.
  */
+function eventAt(daysOut: number, hourUtc: number): { startAt: string; date: string } {
+  const startAt = daysFromNow(daysOut, hourUtc);
+  return { startAt, date: isoDatePart(startAt) };
+}
+
 export const CAMPUS_EVENTS: CampusEvent[] = [
   {
     id: "welcome-fair",
@@ -17,10 +25,20 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "New Student Welcome Fair",
     description: "Meet campus orgs, grab freebies, and get your questions answered before the semester starts.",
     locationId: "red-square",
-    startAt: "2026-08-17T16:00:00.000Z",
-    date: "2026-08-17",
+    ...eventAt(0, 16),
     category: "academic",
     expectedPopularity: "high",
+    source: "seed",
+  },
+  {
+    id: "sunset-yoga",
+    campusId: DEFAULT_CAMPUS_ID,
+    title: "Sunset Yoga on Healy Lawn",
+    description: "Free drop-in yoga, mats provided while they last — just show up.",
+    locationId: "healy-lawn",
+    ...eventAt(1, 23),
+    category: "social",
+    expectedPopularity: "medium",
     source: "seed",
   },
   {
@@ -29,8 +47,7 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "Student Org Interest Night",
     description: "Drop by and learn about clubs looking for new members this semester.",
     locationId: "lauinger-library",
-    startAt: "2026-08-19T23:00:00.000Z",
-    date: "2026-08-19",
+    ...eventAt(2, 23),
     category: "meeting",
     expectedPopularity: "medium",
     source: "seed",
@@ -41,10 +58,20 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "Georgetown Farmers Market",
     description: "Local produce, baked goods, and crafts from D.C.-area vendors.",
     locationId: "red-square",
-    startAt: "2026-08-20T15:00:00.000Z",
-    date: "2026-08-20",
+    ...eventAt(3, 15),
     category: "market",
     expectedPopularity: "medium",
+    source: "seed",
+  },
+  {
+    id: "guts-town-hall",
+    campusId: DEFAULT_CAMPUS_ID,
+    title: "GUTS Bus Rider Town Hall",
+    description: "Open Q&A on the Rosslyn/Arlington routes and schedule changes for the semester.",
+    locationId: "guts-bus-loop",
+    ...eventAt(4, 20),
+    category: "meeting",
+    expectedPopularity: "low",
     source: "seed",
   },
   {
@@ -53,8 +80,7 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "Midnight Mug Open Mic Night",
     description: "Student performers — music, poetry, comedy. Sign up at the door.",
     locationId: "midnight-mug",
-    startAt: "2026-08-22T01:00:00.000Z",
-    date: "2026-08-22",
+    ...eventAt(5, 21),
     category: "social",
     expectedPopularity: "low",
     source: "seed",
@@ -65,8 +91,7 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "Fall Kickoff Concert",
     description: "Live music on Red Square to kick off the semester.",
     locationId: "red-square",
-    startAt: "2026-08-28T23:00:00.000Z",
-    date: "2026-08-28",
+    ...eventAt(11, 23),
     category: "concert",
     expectedPopularity: "high",
     source: "seed",
@@ -77,8 +102,7 @@ export const CAMPUS_EVENTS: CampusEvent[] = [
     title: "Homecoming Blue & Gray Tailgate",
     description: "Food, games, and school spirit ahead of the homecoming game.",
     locationId: "healy-lawn",
-    startAt: "2026-09-12T17:00:00.000Z",
-    date: "2026-09-12",
+    ...eventAt(26, 17),
     category: "sports",
     expectedPopularity: "high",
     source: "seed",

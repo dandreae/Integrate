@@ -2,6 +2,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+/**
+ * Demo default so the Saved tab has events to show on a fresh install —
+ * same reasoning as DEFAULT_SAVED_PLACE_IDS in useSavedPlacesStore. Only
+ * applies the first time this device has never persisted its own value.
+ */
+const DEFAULT_SAVED_EVENT_IDS = ["welcome-fair", "farmers-market", "fall-kickoff-concert"];
+
 interface SavedEventsState {
   savedEventIds: string[];
   /** Event ids with a local reminder notification scheduled — see services/notifications/eventReminders.ts. */
@@ -15,7 +22,7 @@ interface SavedEventsState {
 export const useSavedEventsStore = create<SavedEventsState>()(
   persist(
     (set, get) => ({
-      savedEventIds: [],
+      savedEventIds: DEFAULT_SAVED_EVENT_IDS,
       reminderEventIds: [],
       isSaved: (eventId) => get().savedEventIds.includes(eventId),
       hasReminder: (eventId) => get().reminderEventIds.includes(eventId),
